@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>docking_module</name>
+  <version>0.0.0</version>
+  <description>The docking_module package</description>
+  <maintainer email="root@todo.todo">root</maintainer>
+
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>docking_tracker</exec_depend>
+  <exec_depend>docking_gazebo</exec_depend>
+  <exec_depend>docking_teleop_key</exec_depend>
+
+  <export><metapackage/></export>
+</package>
