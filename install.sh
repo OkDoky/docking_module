@@ -19,17 +19,20 @@ source /opt/ros/${name_ros_version}/setup.bash
 mkdir -p /root/catkin_ws/src
 cd ~/catkin_ws/src && catkin_init_workspace
 git clone https://github.com/OkDoky/docking_module.git -b master
-git clone https://github.com/ROBOTIS-GIT/turtlebot3_simulations.git -b noetic-devel
-git clone https://github.com/aws-robotics/aws-robomaker-small-warehouse-world.git -b ros1
 
-# install rosdep and initialize rosdep
+# install wstool, rosdep and install & initialize dependencies packages
+apt install -y python3-rosdep python3-wstool python3-rosinstall python3-rosinstall-generator
+cd ~/catkin_ws/src
+wstool init
+wstool merge ./docking_module/.rosinstall
+wstool update
 cd ~/catkin_ws
-apt install -y python3-rosdep python3-wstool && rosdep init && rosdep update
+rosdep init && rosdep update && rosdep install -y -r --from-paths src --ignore-src
 
 # setup bashrc
 echo 'alias cw="cd ~/catkin_ws"' >> ~/.bashrc
 echo 'alias cs="cd ~/catkin_ws/src"' >> ~/.bashrc
-echo 'alias cm="cd ~/catkin_ws && catkin_make"' >> ~/.bashrc
+echo 'alias cm="cd ~/catkin_ws && catkin_make -DCMAKE_BUILD_TYPE=Release"' >> ~/.bashrc
 echo 'alias sb="source ~/.bashrc"' >> ~/.bashrc
 echo 'alias eb="nano ~/.bashrc"' >> ~/.bashrc
 echo 'alias simul="roslaunch docking_simul simul.launch"' >> ~/.bashrc

@@ -57,6 +57,7 @@
   <depend>tf2_ros</depend>
   <depend>gazebo_ros</depend>
   <depend>urdf</depend>
+  <depend>rviz</depend>
   <exec_depend>gazebo</exec_depend>
   <exec_depend>turtlebot3_description</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>

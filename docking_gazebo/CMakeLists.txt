@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   tf2_ros
   gazebo_ros
+  rviz
 )
 
 find_package(gazebo REQUIRED)
@@ -29,6 +30,7 @@ catkin_package(
     nav_msgs 
     std_msgs 
     urdf
+    rviz
   DEPENDS GAZEBO
 )
 
