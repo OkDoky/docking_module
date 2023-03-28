@@ -1,0 +1,5 @@
+<launch>
+    <node name="teleop_key" pkg="docking_teleop_key" type="teleop.py">
+        <param name="model" value="burger"/>
+    </node>
+</launch>
