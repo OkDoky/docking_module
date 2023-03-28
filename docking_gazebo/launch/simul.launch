@@ -12,7 +12,7 @@
         <arg name="headless" value="false"/>
         <arg name="debug" value="false"/>
     </include>
-    <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_burger.urdf.xacro"/>
+    <param name="robot_description" command="$(find xacro)/xacro --inorder $(find robot_description)/urdf/turtlebot3_burger.urdf.xacro"/>
     <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model turtlebot3 -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find docking_gazebo)/rviz/robot.rviz"/>
