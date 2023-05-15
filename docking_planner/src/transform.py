@@ -4,6 +4,7 @@ import rospy
 import os
 import sys
 import tf
+import math
 import numpy as np
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry, Path
@@ -75,6 +76,27 @@ def callback_odomTF(sub_odom):
     global robot_odom
     robot_odom = sub_odom
 
+def get_rotation_angle(p1, p2):
+    v = (p2[0]-p1[0], p2[1]-p1[1])
+    # 벡터의 노름 계산
+    norm_v = math.sqrt(v[0]**2 + v[1]**2)
+    # 단위 벡터로 변환
+    unit_v = (v[0]/norm_v, v[1]/norm_v)
+
+    # x축 단위 벡터
+    x_unit = (1, 0)
+
+    # 두 벡터의 내적 계산
+    dot_product = x_unit[0]*unit_v[0] + x_unit[1]*unit_v[1]
+
+    # 각도 계산
+    if dot_product == 0:
+        angle = 90
+    else:
+        angle = math.degrees(math.acos(dot_product))
+
+    return angle
+
 def cal_plan(displacement):
     global Aurco_tf, robot_odom
     if len(Aurco_tf.transforms) != 0 and robot_odom.header.frame_id != "":
@@ -96,14 +118,26 @@ def cal_plan(displacement):
         point_new = Point(x=v_new[0], y=v_new[1], z=v_new[2]) # offset point
 
         start_point = Point(x=robot_odom.pose.pose.position.x, y=robot_odom.pose.pose.position.y, z=0.) # now robot odom position
-        print("start_point")
-        print(start_point)
-        print("point_new")
-        print(point_new)
-        print("origin_pose")
-        print(origin_pos)
-        print("------------------")
-        return compute_plan(start_point, 0, point_new, 0, origin_pos)
+        q = (
+            robot_odom.pose.pose.orientation.x,
+            robot_odom.pose.pose.orientation.y,
+            robot_odom.pose.pose.orientation.z,
+            robot_odom.pose.pose.orientation.w
+        )
+        robot_angle = tf.transformations.euler_from_quaternion(q)
+        # print(np.rad2deg(robot_angle[2]))
+
+        # print(get_rotation_angle(v_new,origin_new))
+    
+        # print(tf.transformations.euler_from_quaternion(robot_odom.pose.pose.orientation))
+        # print("start_point")
+        # print(start_point)
+        # print("point_new")
+        # print(point_new)
+        # print("origin_pose")
+        # print(origin_pos)
+        # print("------------------")
+        return compute_plan(start_point, np.rad2deg(robot_angle[2]), point_new, get_rotation_angle(v_new,origin_new), origin_pos)
     else: return Path()
 
 def sub_TF():

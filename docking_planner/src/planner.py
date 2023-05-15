@@ -54,7 +54,7 @@ class QuinticPolynomial:
         return xt
 
 
-def quintic_polynomials_planner(sx, sy, syaw, gx, gy, gyaw, dt, sv = 0.1, sa=0.05, gv=0.1, \
+def quintic_polynomials_planner(sx, sy, syaw, gx, gy, gyaw, dt, sv = 0.0, sa=0.02, gv=0.1, \
                                 ga=0.05, max_accel=0.05, max_jerk=0.05):
     """
     quintic polynomial planner
