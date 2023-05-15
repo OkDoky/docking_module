@@ -1,0 +1,16 @@
+<launch>
+    <include file="$(find aruco_detector_ocv)/launch/detector.launch">
+        <arg name="image_width" default="1920" />
+        <arg name="image_height" default="1080" />
+        <arg name="camera" default="/camera/rgb/image_raw" />
+        <arg name="camera_info" default="/camera/rgb/camera_info" />
+        <arg name="tf_prefix" default="marker_id" />
+        <arg name="show_detections" default="true" />
+        <arg name="marker_size" default="0.1" doc="length of the physical marker's side in meters"/>
+        <arg name="dictionary_name" default="DICT_ARUCO_ORIGINAL" />
+        <arg name="blur_window_size" default="1" />
+        <arg name="num_detected" default="25" />
+        <arg name="min_prec_value" default="50" />
+    </include>
+    <node name="detecting_marker" pkg="marker_detecting" type="detecting_marker.py"/>
+</launch>
