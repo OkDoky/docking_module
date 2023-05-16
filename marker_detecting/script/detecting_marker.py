@@ -17,6 +17,8 @@ class Filter():
     
         self.marker_tf = TransformStamped()
         self.br = TransformBroadcaster()
+        self.swich = False
+        self.marker_id = rospy.get_param("/marker_id", 7)
         
         self.A = np.array([[1, 0, 0, 0, 0, 0],
                             [0, 1, 0, 0, 0, 0],
@@ -42,29 +44,48 @@ class Filter():
         self.P = 1.0 * np.eye(6)
         
     def cb(self, msg):
-        if len(msg.transforms):
-            self.marker_tf = msg.transforms[0]
-            euler = euler_from_quaternion([self.marker_tf.transform.rotation.x,
-                                            self.marker_tf.transform.rotation.y,
-                                            self.marker_tf.transform.rotation.z,
-                                            self.marker_tf.transform.rotation.w])
-            z_meas = np.array([self.marker_tf.transform.translation.x,
-                               self.marker_tf.transform.translation.y,
-                               self.marker_tf.transform.translation.z,
-                               euler[0],
-                               euler[1],
-                               euler[2]])
-            self.kalman_filter(z_meas)
-            quaternion = quaternion_from_euler(self.x[3], self.x[4], self.x[5])
-            self.marker_tf.transform.translation.x = self.x[0]
-            self.marker_tf.transform.translation.y = self.x[1]
-            self.marker_tf.transform.translation.z = self.x[2]
-            self.marker_tf.transform.rotation.x = quaternion[0]
-            self.marker_tf.transform.rotation.y = quaternion[1]
-            self.marker_tf.transform.rotation.z = quaternion[2]
-            self.marker_tf.transform.rotation.w = quaternion[3]
-            self.pub.publish(self.marker_tf)
-            self.br.sendTransform(self.marker_tf)
+        if self.swich:
+            if len(msg.transforms):
+                for tf in msg.transforms:
+                    if int(tf.child_frame_id[-1]) == self.marker_id:
+                        self.marker_tf = msg.transforms[0]
+                        euler = euler_from_quaternion([self.marker_tf.transform.rotation.x,
+                                                        self.marker_tf.transform.rotation.y,
+                                                        self.marker_tf.transform.rotation.z,
+                                                        self.marker_tf.transform.rotation.w])
+                        z_meas = np.array([self.marker_tf.transform.translation.x,
+                                        self.marker_tf.transform.translation.y,
+                                        self.marker_tf.transform.translation.z,
+                                        euler[0],
+                                        euler[1],
+                                        euler[2]])
+                        self.kalman_filter(z_meas)
+                        quaternion = quaternion_from_euler(self.x[3], self.x[4], self.x[5])
+                        self.marker_tf.transform.translation.x = self.x[0]
+                        self.marker_tf.transform.translation.y = self.x[1]
+                        self.marker_tf.transform.translation.z = self.x[2]
+                        self.marker_tf.transform.rotation.x = quaternion[0]
+                        self.marker_tf.transform.rotation.y = quaternion[1]
+                        self.marker_tf.transform.rotation.z = quaternion[2]
+                        self.marker_tf.transform.rotation.w = quaternion[3]
+                        self.pub.publish(self.marker_tf)
+                        self.br.sendTransform(self.marker_tf)
+        else:
+            if len(msg.transforms):
+                for tf in msg.transforms:
+                    if int(tf.child_frame_id[-1]) == self.marker_id:
+                        self.marker_tf = msg.transforms[0]
+                        euler = euler_from_quaternion([self.marker_tf.transform.rotation.x,
+                                                        self.marker_tf.transform.rotation.y,
+                                                        self.marker_tf.transform.rotation.z,
+                                                        self.marker_tf.transform.rotation.w])
+                        self.x = np.array([self.marker_tf.transform.translation.x,
+                                        self.marker_tf.transform.translation.y,
+                                        self.marker_tf.transform.translation.z,
+                                        euler[0],
+                                        euler[1],
+                                        euler[2]])
+                        self.swich = True
             
     def kalman_filter(self, z_meas):
         x_pred = self.A @ self.x
