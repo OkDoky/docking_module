@@ -23,16 +23,15 @@ Aurco_tf = TFMessage()
 Aruco_pose = Quaternion()
 Odom_pose = Quaternion()
 robot_odom = Odometry()
-def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, dt=0.1):
+def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, frame, dt=0.1):
+
     start_ang = np.deg2rad(start_yaw)
     end_ang = np.deg2rad(end_yaw)
     time, x, y, yaw, v, a, j = quintic_polynomials_planner(\
         start_point.x, start_point.y, start_ang, end_point.x, end_point.y, end_ang, dt)
     path = Path()
-
     path.header.stamp = rospy.Time.now()
     path.header.frame_id = "odom"
-
     for i, t in enumerate(time):
         pose_stamped = PoseStamped()
         pose_stamped.header.stamp = path.header.stamp + rospy.Duration.from_sec(t)
@@ -40,11 +39,13 @@ def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, dt=0.
         pose_stamped.pose.position.x = x[i]
         pose_stamped.pose.position.y = y[i]
         pose_stamped.pose.position.z = 0
+        rotation_matrix = tf.transformations.rotation_matrix((yaw[i]), (0, 0, 1))
+        result_q = tf.transformations.quaternion_from_matrix(rotation_matrix)
         quaternion = Quaternion()
-        quaternion.x = 0
-        quaternion.y = 0
-        quaternion.z = 0
-        quaternion.w = 1
+        quaternion.x = result_q[0]
+        quaternion.y = result_q[1]
+        quaternion.z = result_q[2]
+        quaternion.w = result_q[3]
         pose_stamped.pose.orientation = quaternion
         path.poses.append(pose_stamped)   
     line_start = np.array([end_point.x, end_point.y, 0])
@@ -59,10 +60,10 @@ def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, dt=0.
         pose_stamped.pose.position.y = point[1]
         pose_stamped.pose.position.z = 0
         quaternion = Quaternion()
-        quaternion.x = 0
-        quaternion.y = 0
-        quaternion.z = 0
-        quaternion.w = 1
+        quaternion.x = result_q[0]
+        quaternion.y = result_q[1]
+        quaternion.z = result_q[2]
+        quaternion.w = result_q[3]
         pose_stamped.pose.orientation = quaternion
         path.poses.append(pose_stamped)
     return path
@@ -137,7 +138,7 @@ def cal_plan(displacement):
         # print("origin_pose")
         # print(origin_pos)
         # print("------------------")
-        return compute_plan(start_point, np.rad2deg(robot_angle[2]), point_new, get_rotation_angle(v_new,origin_new), origin_pos)
+        return compute_plan(start_point, np.rad2deg(robot_angle[2]), point_new, get_rotation_angle(v_new,origin_new), origin_pos, q)
     else: return Path()
 
 def sub_TF():
