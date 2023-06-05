@@ -1,0 +1,12 @@
+<launch>
+    <arg name="dst_x"           default="2.0"/>
+    <arg name="dst_y"           default="0.0"/>
+    <arg name="increment"       default="0.05"/>
+
+    <node pkg="docking_tracker" name="path_generator" type="path_generator.py">
+        <param name="dst_x"         value="$(arg dst_x)"/>
+        <param name="dst_y"         value="$(arg dst_y)"/>
+        <param name="increment"     value="$(arg increment)"/>
+        <remap from="/desired_path" to="/plan"/>
+    </node>
+</launch>
