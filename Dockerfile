@@ -1,6 +1,6 @@
 FROM ros:noetic-ros-core
 
-RUN apt update && apt dist-upgrade -y
+RUN apt-get update && apt-get dist-upgrade -y
 
 COPY ./install.sh /
 
