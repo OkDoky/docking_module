@@ -1,5 +1,7 @@
 <launch>
-    <node name="path_generate" pkg="docking_planner" type="transform.py">
-        <param name="displacement" type="double" value="0.5"/>
+    <node name="path_generate" pkg="docking_planner" type="transform.py" output="screen">
+        <param name="path_displacement" type="double" value="0.5"/>
+        <param name="robot_size" type="double" value="0.1"/>
+        <param name="marker_displacement" type="double" value="0.05"/>
     </node>
 </launch>
