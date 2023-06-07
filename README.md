@@ -8,7 +8,9 @@ compute_Path(msg type - Path)
 
 # parameter name
 path_displacement -> straight section length
+
 robot_size
+
 marker_displacement
 
 ---
