@@ -43,6 +43,25 @@ class Filter():
         self.x = np.array([1, 0, 0.14, pq_euler[0], pq_euler[1], pq_euler[2]])
         self.P = 1.0 * np.eye(6)
         
+        # self.A = np.array([[1, 0, 0, 0, 0, 0, 0],
+        #                     [0, 1, 0, 0, 0, 0, 0],
+        #                     [0, 0, 1, 0, 0, 0, 0],
+        #                     [0, 0, 0, 1, 0, 0, 0],
+        #                     [0, 0, 0, 0, 1, 0, 0],
+        #                     [0, 0, 0, 0, 0, 1, 0],
+        #                     [0, 0, 0, 0, 0, 0, 1]])
+        # self.H = np.array([[1, 0, 0, 0, 0, 0, 0],
+        #                     [0, 1, 0, 0, 0, 0, 0],
+        #                     [0, 0, 1, 0, 0, 0, 0],
+        #                     [0, 0, 0, 1, 0, 0, 0],
+        #                     [0, 0, 0, 0, 1, 0, 0],
+        #                     [0, 0, 0, 0, 0, 1, 0],
+        #                     [0, 0, 0, 0, 0, 0, 1]])
+        # self.Q = 0.01 * np.eye(7)
+        # self.R = 1000.0 * np.eye(7)
+        
+        # self.P = 1.0 * np.eye(7)
+        
     def cb(self, msg):
         if self.swich:
             if len(msg.transforms):
@@ -87,6 +106,43 @@ class Filter():
                                         euler[2]])
                         self.swich = True
             
+    # def cb(self, msg):
+    #     if self.swich:
+    #         if len(msg.transforms):
+    #             for tf in msg.transforms:
+    #                 if int(tf.child_frame_id[-1]) == self.marker_id:
+    #                     self.marker_tf = msg.transforms[0]
+    #                     z_meas = np.array([self.marker_tf.transform.translation.x,
+    #                                     self.marker_tf.transform.translation.y,
+    #                                     self.marker_tf.transform.translation.z,
+    #                                     self.marker_tf.transform.rotation.x,
+    #                                     self.marker_tf.transform.rotation.y,
+    #                                     self.marker_tf.transform.rotation.z,
+    #                                     self.marker_tf.transform.rotation.w])
+    #                     self.kalman_filter(z_meas)
+    #                     self.marker_tf.transform.translation.x = self.x[0]
+    #                     self.marker_tf.transform.translation.y = self.x[1]
+    #                     self.marker_tf.transform.translation.z = self.x[2]
+    #                     self.marker_tf.transform.rotation.x = self.x[3]
+    #                     self.marker_tf.transform.rotation.y = self.x[4]
+    #                     self.marker_tf.transform.rotation.z = self.x[5]
+    #                     self.marker_tf.transform.rotation.w = self.x[6]
+    #                     self.pub.publish(self.marker_tf)
+    #                     self.br.sendTransform(self.marker_tf)
+    #     else:
+    #         if len(msg.transforms):
+    #             for tf in msg.transforms:
+    #                 if int(tf.child_frame_id[-1]) == self.marker_id:
+    #                     self.marker_tf = msg.transforms[0]
+    #                     self.x = np.array([self.marker_tf.transform.translation.x,
+    #                                     self.marker_tf.transform.translation.y,
+    #                                     self.marker_tf.transform.translation.z,
+    #                                     self.marker_tf.transform.rotation.x,
+    #                                     self.marker_tf.transform.rotation.y,
+    #                                     self.marker_tf.transform.rotation.z,
+    #                                     self.marker_tf.transform.rotation.w])
+    #                     self.swich = True
+                        
     def kalman_filter(self, z_meas):
         x_pred = self.A @ self.x
         P_pred = self.A @ self.P @ self.A.T + self.Q
