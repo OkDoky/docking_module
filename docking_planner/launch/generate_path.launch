@@ -1,0 +1,5 @@
+<launch>
+    <node name="path_generate" pkg="docking_planner" type="transform.py">
+        <param name="displacement" type="double" value="0.5"/>
+    </node>
+</launch>

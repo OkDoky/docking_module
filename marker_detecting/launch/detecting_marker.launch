@@ -1,0 +1,32 @@
+<launch>
+    <arg name="image_width" default="1920" /> <!-- 640, 1920 -->
+    <arg name="image_height" default="1080" /> <!-- 480, 1080 -->
+    <arg name="camera" default="/camera/rgb/image_raw" />
+    <arg name="camera_info" default="/camera/rgb/camera_info" />
+    <arg name="tf_prefix" default="marker_id" />
+    <arg name="show_detections" default="true" />
+    <arg name="marker_size" default="0.1" doc="length of the physical marker's side in meters"/>
+    <arg name="dictionary_name" default="DICT_ARUCO_ORIGINAL" />
+    <arg name="blur_window_size" default="1" />
+    <arg name="num_detected" default="25" /><!-- 0: do not use it, -->
+    <arg name="min_prec_value" default="50" /><!-- 0: do not use it, 80 means aruco marker must be detected in 80% of the last pics to be displayed -->
+    <arg name="marker_id" default="7" />
+    <param name="marker_id" type="int" value="$(arg marker_id)"/>
+    <node pkg="aruco_detector_ocv" type="node" name="aruco_detector_ocv" output="screen">
+        <param name="camera" type="string" value="$(arg camera)"/>
+        <param name="camera_info" type="string" value="$(arg camera_info)"/>
+        <param name="tf_prefix" type="string" value="$(arg tf_prefix)"/>
+        <param name="show_detections" type="bool" value="$(arg show_detections)"/>
+        <param name="marker_size" type="double" value="$(arg marker_size)"/>
+        <param name="dictionary_name" type="string" value="$(arg dictionary_name)"/>
+        <param name="image_width" type="double" value="$(arg image_width)"/>
+        <param name="image_height" type="double" value="$(arg image_height)"/>
+        <param name="blur_window_size" type="double" value="$(arg blur_window_size)"/>
+        <param name="num_detected" type="double" value="$(arg num_detected)"/>
+        <param name="min_prec_value" type="double" value="$(arg min_prec_value)"/>
+        <param name="marker_id" type="int" value="$(arg marker_id)"/>
+    </node>
+    <node name="detecting_marker" pkg="marker_detecting" type="detecting_marker.py" output="screen">
+        
+    </node>
+</launch>
