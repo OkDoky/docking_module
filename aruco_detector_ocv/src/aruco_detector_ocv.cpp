@@ -20,6 +20,7 @@
 #include "sensor_msgs/CameraInfo.h"
 #include "std_msgs/Empty.h"
 #include "std_msgs/Int16.h"
+#include "std_srvs/SetBool.h"
 #include "geometry_msgs/Pose.h"
 
 // ROS image geometry
@@ -55,6 +56,8 @@ image_transport::Publisher result_img_pub_;
 ros::Publisher tf_list_pub_;
 ros::Publisher aruco_info_pub_;
 
+bool set_start = false;
+
 tf2_ros::Buffer tfBuffer;
 
 #define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
@@ -83,6 +86,16 @@ int min_prec_value = 80; // min precentage value to be a detected marker.
 int marker_id = 0;
 map<int,  std::vector<int>  > ids_hashmap;   // key: ids, value: number within last 100 imgs
 
+
+bool startCB(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res){
+    set_start = req.data;
+    res.success = true;
+    if(set_start)
+        res.message = "set_start : true";
+    else
+        res.message = "set_start : false";
+    return true;
+}
 
 void int_handler(int x) {
     // disconnect and exit gracefully
@@ -243,46 +256,48 @@ if(ids.size()>0)
 
     // Create and publish tf message for each marker
     tf2_msgs::TFMessage tf_msg_list;
-    for (auto i = 0; i < rotation_vectors.size(); ++i)
-    {
-
-	    if(ids[i] == int(marker_id) && getPrec(ids,i)>min_prec_value)
+    if(set_start){
+        for (auto i = 0; i < rotation_vectors.size(); ++i)
         {
-            // ROS_INFO("aruco markers tf %d", marker_id);
-            auto translation_vector = translation_vectors[i];
-            auto rotation_vector = rotation_vectors[i];
-            auto transform = create_transform(translation_vector, rotation_vector);
-            geometry_msgs::TransformStamped tf_msg;
-            geometry_msgs::Pose marker_pose;
-            geometry_msgs::TransformStamped poseTransform;
-            tf_msg.header.stamp = stamp;
-            tf_msg.header.frame_id = "odom";
-            // tf_msg.header.frame_id = "camera_rgb_optical_frame";
-            stringstream ss;
-            ss << marker_tf_prefix << ids[i];
-            tf_msg.child_frame_id = ss.str();
-            marker_pose.position.x = transform.getOrigin().getX();
-            marker_pose.position.y = transform.getOrigin().getY();
-            marker_pose.position.z = transform.getOrigin().getZ();
-            marker_pose.orientation.x = transform.getRotation().getX();
-            marker_pose.orientation.y = transform.getRotation().getY();
-            marker_pose.orientation.z = transform.getRotation().getZ();
-            marker_pose.orientation.w = transform.getRotation().getW();
-            poseTransform = tfBuffer.lookupTransform("odom", "camera_rgb_optical_frame", ros::Time(0), ros::Duration(1.0));
-            tf2::doTransform(marker_pose, marker_pose, poseTransform);
-            tf_msg.transform.translation.x = marker_pose.position.x ;
-            tf_msg.transform.translation.y = marker_pose.position.y;
-            tf_msg.transform.translation.z = marker_pose.position.z;
-            tf_msg.transform.rotation.x = marker_pose.orientation.x;
-            tf_msg.transform.rotation.y = marker_pose.orientation.y;
-            tf_msg.transform.rotation.z = marker_pose.orientation.z;
-            tf_msg.transform.rotation.w = marker_pose.orientation.w;
-            tf_msg_list.transforms.push_back(tf_msg);
-            // br.sendTransform(tf_msg);
-        }
-    }
-    tf_list_pub_.publish(tf_msg_list);
 
+            if(ids[i] == int(marker_id) && getPrec(ids,i)>min_prec_value)
+            {
+                // ROS_INFO("aruco markers tf %d", marker_id);
+                auto translation_vector = translation_vectors[i];
+                auto rotation_vector = rotation_vectors[i];
+                auto transform = create_transform(translation_vector, rotation_vector);
+                geometry_msgs::TransformStamped tf_msg;
+                geometry_msgs::Pose marker_pose;
+                geometry_msgs::TransformStamped poseTransform;
+                tf_msg.header.stamp = stamp;
+                tf_msg.header.frame_id = "odom";
+                // tf_msg.header.frame_id = "camera_rgb_optical_frame";
+                stringstream ss;
+                ss << marker_tf_prefix << ids[i];
+                tf_msg.child_frame_id = ss.str();
+                marker_pose.position.x = transform.getOrigin().getX();
+                marker_pose.position.y = transform.getOrigin().getY();
+                marker_pose.position.z = transform.getOrigin().getZ();
+                marker_pose.orientation.x = transform.getRotation().getX();
+                marker_pose.orientation.y = transform.getRotation().getY();
+                marker_pose.orientation.z = transform.getRotation().getZ();
+                marker_pose.orientation.w = transform.getRotation().getW();
+                poseTransform = tfBuffer.lookupTransform("odom", "camera_rgb_optical_frame", ros::Time(0), ros::Duration(1.0));
+                tf2::doTransform(marker_pose, marker_pose, poseTransform);
+                tf_msg.transform.translation.x = marker_pose.position.x ;
+                tf_msg.transform.translation.y = marker_pose.position.y;
+                tf_msg.transform.translation.z = marker_pose.position.z;
+                tf_msg.transform.rotation.x = marker_pose.orientation.x;
+                tf_msg.transform.rotation.y = marker_pose.orientation.y;
+                tf_msg.transform.rotation.z = marker_pose.orientation.z;
+                tf_msg.transform.rotation.w = marker_pose.orientation.w;
+                tf_msg_list.transforms.push_back(tf_msg);
+                
+                // br.sendTransform(tf_msg);
+            }
+        }
+        tf_list_pub_.publish(tf_msg_list);
+    }
 }
 
 // rotate vector:
@@ -390,8 +405,7 @@ int main(int argc, char **argv) {
     dictionary_names.insert(pair<string, aruco::PREDEFINED_DICTIONARY_NAME>("DICT_7X7_100", aruco::DICT_7X7_100));
     dictionary_names.insert(pair<string, aruco::PREDEFINED_DICTIONARY_NAME>("DICT_7X7_250", aruco::DICT_7X7_250));
     dictionary_names.insert(pair<string, aruco::PREDEFINED_DICTIONARY_NAME>("DICT_7X7_1000", aruco::DICT_7X7_1000));
-    dictionary_names.insert(
-            pair<string, aruco::PREDEFINED_DICTIONARY_NAME>("DICT_ARUCO_ORIGINAL", aruco::DICT_ARUCO_ORIGINAL));
+    dictionary_names.insert(pair<string, aruco::PREDEFINED_DICTIONARY_NAME>("DICT_ARUCO_ORIGINAL", aruco::DICT_ARUCO_ORIGINAL));
 
     signal(SIGINT, int_handler);
     // Initalize ROS node
@@ -429,6 +443,7 @@ int main(int argc, char **argv) {
     ros::Subscriber rgb_sub = nh.subscribe(rgb_topic.c_str(), queue_size, callback);
     ros::Subscriber rgb_info_sub = nh.subscribe(rgb_info_topic.c_str(), queue_size, callback_camera_info);
     ros::Subscriber parameter_sub = nh.subscribe("/update_params", queue_size, update_params_cb);
+    ros::ServiceServer start_ser = nh.advertiseService("/set_start", startCB);
 
     // Publisher:
   image_transport::ImageTransport it(nh);
