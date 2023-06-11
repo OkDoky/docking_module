@@ -98,11 +98,11 @@ def get_rotation_angle(p1, p2):
 
     return angle
 
-def cal_plan(displacement):
+def cal_plan(displacement, marekr_displacement):
     global Aurco_tf, robot_odom
     if len(Aurco_tf.transforms) != 0 and robot_odom.header.frame_id != "":
         tf_trans = Aurco_tf.transforms[0].transform.translation
-        point_origin = Point(x=0., y=0., z=0.)
+        point_origin = Point(x=0., y=0., z=marekr_displacement)
         point = Point(x=0., y=0., z=displacement)
 
         origin_quaternion = Aurco_tf.transforms[0].transform.rotation
@@ -143,13 +143,17 @@ def cal_plan(displacement):
 
 def sub_TF():
     rospy.init_node('subscribeTF', anonymous=True)
-    displacement = float(rospy.get_param("displacement", "0.5"))
-    print(displacement)
+    path_displacement = float(rospy.get_param("~path_displacement"))
+    robot_size = float(rospy.get_param("~robot_size"))
+    marker_displacement = float(rospy.get_param("~marker_displacement"))
+    print("path_displacement : ", path_displacement)
+    print("robot_size : ", robot_size)
+    print("marker_displacement : ", marker_displacement)
     rospy.Subscriber("tf_list", TFMessage, callback_arucoTF)
     rospy.Subscriber("odom", Odometry, callback_odomTF)
     pub = rospy.Publisher('compute_Path', Path, queue_size=10)
     while not rospy.is_shutdown():
-        plan = cal_plan(displacement)
+        plan = cal_plan(path_displacement, robot_size+marker_displacement)
         if len(plan.poses) != 0:
             pub.publish(plan)
         rospy.sleep(0.1)

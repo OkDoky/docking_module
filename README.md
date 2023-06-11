@@ -11,3 +11,14 @@ roslaunch docking_tracker path_tracking.launch
 
 # topic name
 compute_Path(msg type - Path)
+
+# parameter name
+path_displacement -> straight section length
+
+robot_size
+
+marker_displacement
+
+---
+robot_size + marker_displacement = distance from marker
+---
