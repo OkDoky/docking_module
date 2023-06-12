@@ -69,7 +69,8 @@ def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, frame
     return path
 
 def callback_arucoTF(tf_data):
-    global Aurco_tf
+    global Aurco_tf, callback_trigger
+    callback_trigger = True
     Aurco_tf = tf_data
 
 
@@ -142,6 +143,8 @@ def cal_plan(displacement, marekr_displacement):
     else: return Path()
 
 def sub_TF():
+    global callback_trigger
+    callback_trigger = False
     rospy.init_node('subscribeTF', anonymous=True)
     path_displacement = float(rospy.get_param("~path_displacement"))
     robot_size = float(rospy.get_param("~robot_size"))
@@ -153,9 +156,13 @@ def sub_TF():
     rospy.Subscriber("odom", Odometry, callback_odomTF)
     pub = rospy.Publisher('compute_Path', Path, queue_size=10)
     while not rospy.is_shutdown():
+        if not callback_trigger:
+            rospy.sleep(0.1)
+            continue
         plan = cal_plan(path_displacement, robot_size+marker_displacement)
         if len(plan.poses) != 0:
             pub.publish(plan)
+            callback_trigger = False
         rospy.sleep(0.1)
     
 
