@@ -13,14 +13,15 @@
         <arg name="debug" value="false"/>
     </include>
 
-    <include file="$(find docking_tracker)/launch/path_gen.launch">
-        <arg name="dst_x"           value="2.0"/>
-        <arg name="dst_y"           value="0.0"/>
-        <arg name="increment"       value="0.05"/>
-    </include>
-
     <param name="robot_description" command="$(find xacro)/xacro --inorder $(find robot_description)/urdf/turtlebot3_burger.urdf.xacro"/>
     <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model turtlebot3 -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+
+    <include file="$(find marker_detecting)/launch/detecting_marker.launch">
+        <arg name="marker_id"	    value="7"/>
+    </include>
+
+    <include file="$(find docking_planner)/launch/generate_path.launch"/>
+    <include file="$(find docking_tracker)/launch/path_tracking.launch"/>
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find docking_gazebo)/rviz/robot.rviz"/>
 </launch>
