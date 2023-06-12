@@ -8,7 +8,7 @@ import math
 import numpy as np
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry, Path
-from geometry_msgs.msg import PointStamped, QuaternionStamped, Point, Quaternion, PoseStamped
+from geometry_msgs.msg import PointStamped, QuaternionStamped, Point, Quaternion, PoseStamped, TransformStamped
 from tf.transformations import quaternion_matrix, quaternion_from_matrix
 sys.path.append(os.path.dirname(__file__))
 print(os.path.dirname(__file__))
@@ -19,7 +19,8 @@ class tf_Transform:
     def __init__(self):
         _aruco = TFMessage()
 
-Aurco_tf = TFMessage()
+# Aurco_tf = TFMessage()
+Aruco_tf = TransformStamped()
 Aruco_pose = Quaternion()
 Odom_pose = Quaternion()
 robot_odom = Odometry()
@@ -71,7 +72,9 @@ def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, frame
 def callback_arucoTF(tf_data):
     global Aurco_tf, callback_trigger
     callback_trigger = True
+    # Aurco_tf[0] = tf_data
     Aurco_tf = tf_data
+
 
 
 def callback_odomTF(sub_odom):
@@ -101,12 +104,13 @@ def get_rotation_angle(p1, p2):
 
 def cal_plan(displacement, marekr_displacement):
     global Aurco_tf, robot_odom
-    if len(Aurco_tf.transforms) != 0 and robot_odom.header.frame_id != "":
-        tf_trans = Aurco_tf.transforms[0].transform.translation
+    # if len(Aurco_tf.transforms) != 0 and robot_odom.header.frame_id != "":
+    if (Aurco_tf) != None and robot_odom.header.frame_id != "":
+        tf_trans = Aurco_tf.transform.translation
         point_origin = Point(x=0., y=0., z=marekr_displacement)
         point = Point(x=0., y=0., z=displacement)
 
-        origin_quaternion = Aurco_tf.transforms[0].transform.rotation
+        origin_quaternion = Aurco_tf.transform.rotation
         origin_translation = (tf_trans.x, tf_trans.y, tf_trans.z)
         origin_matrix = np.dot(tf.transformations.translation_matrix(origin_translation), tf.transformations.quaternion_matrix\
                         ([origin_quaternion.x, origin_quaternion.y, origin_quaternion.z, origin_quaternion.w]))
@@ -152,7 +156,8 @@ def sub_TF():
     print("path_displacement : ", path_displacement)
     print("robot_size : ", robot_size)
     print("marker_displacement : ", marker_displacement)
-    rospy.Subscriber("tf_list", TFMessage, callback_arucoTF)
+    # rospy.Subscriber("tf_list", TFMessage, callback_arucoTF)
+    rospy.Subscriber("filtered_tf", TransformStamped, callback_arucoTF)
     rospy.Subscriber("odom", Odometry, callback_odomTF)
     pub = rospy.Publisher('compute_Path', Path, queue_size=10)
     while not rospy.is_shutdown():
