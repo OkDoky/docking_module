@@ -41,6 +41,7 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Twist.h>
+#include <std_srvs/SetBool.h>
 
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
@@ -87,8 +88,10 @@ namespace mpc_ros{
             void initialize();
             void publishLocalPlan(const std::vector<geometry_msgs::PoseStamped> transformed_plan);
             bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel);
-            bool mpcComputeVelocityCommands(geometry_msgs::Twist& cmd_vel);
-            Trajectory findBestPath(geometry_msgs::Twist& drive_velocities);
+            bool mpcComputeVelocityCommands(geometry_msgs::Twist& cmd_vel,
+                                            const std::vector<geometry_msgs::PoseStamped> transformed_plan);
+            Trajectory findBestPath(geometry_msgs::Twist& drive_velocities,
+                                    const std::vector<geometry_msgs::PoseStamped> transformed_plan);
             mpc_state getTrackingState();
             void setParam(); 
             void getLocalPlan(std::vector<geometry_msgs::PoseStamped>& transformed_plan);
@@ -111,6 +114,7 @@ namespace mpc_ros{
             ros::Subscriber _sub_odom, _sub_global_plan;
             ros::Publisher _pub_downsampled_path, _pub_mpctraj;
             ros::Publisher cmd_vel_pub_;
+            ros::ServiceClient _client_set_start;
             tf2_ros::Buffer *tf_;  ///
             
             nav_msgs::Odometry _odom;

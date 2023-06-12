@@ -51,7 +51,7 @@ namespace mpc_ros{
         _sub_global_plan = _nh.subscribe("/plan", 1, &MPCPlannerROS::pathCB, this);
         _pub_mpctraj   = _nh.advertise<nav_msgs::Path>("mpc_trajectory", 1);// MPC trajectory output
         _pub_downsampled_path  = _nh.advertise<nav_msgs::Path>("mpc_reference", 1); // reference path for MPC ///mpc_reference 
-
+        _client_set_start = _nh.serviceClient<std_srvs::SetBool>("set_start");
         // init robot state
         _rx = 0.0;
         _ry = 0.0;
@@ -142,7 +142,7 @@ namespace mpc_ros{
             return true;
         }
         else if (_arrival_state == TRACKING){
-            bool isOk = mpcComputeVelocityCommands(cmd_vel);
+            bool isOk = mpcComputeVelocityCommands(cmd_vel, transformed_plan);
             if (!isOk)
                 ROS_WARN("[MPCROS] failed to produce path.");
             return isOk;
@@ -151,14 +151,15 @@ namespace mpc_ros{
     }
 
     // Timer: Control Loop (closed loop nonlinear MPC)
-    bool MPCPlannerROS::mpcComputeVelocityCommands(geometry_msgs::Twist& cmd_vel)
+    bool MPCPlannerROS::mpcComputeVelocityCommands(geometry_msgs::Twist& cmd_vel,
+                                                   const std::vector<geometry_msgs::PoseStamped> transformed_plan)
     {
 
         //compute what trajectory to drive along
         geometry_msgs::Twist drive_cmds;
 
         // call with updated footprint
-        Trajectory path = findBestPath(drive_cmds);
+        Trajectory path = findBestPath(drive_cmds, transformed_plan);
 
         //pass along drive commands
         cmd_vel = drive_cmds;
@@ -174,7 +175,8 @@ namespace mpc_ros{
         return true;
     }
 
-    Trajectory MPCPlannerROS::findBestPath(geometry_msgs::Twist& drive_velocities){
+    Trajectory MPCPlannerROS::findBestPath(geometry_msgs::Twist& drive_velocities,
+                                           const std::vector<geometry_msgs::PoseStamped> transformed_plan){
 
         Trajectory result_traj_;
         geometry_msgs::PoseStamped goal_pose = _g_path.poses.back();
@@ -204,21 +206,21 @@ namespace mpc_ros{
         //find waypoints distance
         if(_waypointsDist <=0.0)
         {        
-            double dx = _l_path.poses[1].pose.position.x - _l_path.poses[0].pose.position.x;
-            double dy = _l_path.poses[1].pose.position.y - _l_path.poses[0].pose.position.y;
+            double dx = transformed_plan[1].pose.position.x - transformed_plan[0].pose.position.x;
+            double dy = transformed_plan[1].pose.position.y - transformed_plan[0].pose.position.y;
             _waypointsDist = sqrt(dx*dx + dy*dy);
             _downSampling = 2;
         }
 
         // Cut and downsampling the path
-        for(int i =0; i< _l_path.poses.size(); i++)
+        for(int i =0; i< transformed_plan.size(); i++)
         {
             if(total_length > _path_length)
                 break;
 
             if(sampling == _downSampling)
             {
-                odom_path.poses.push_back(_l_path.poses[i]);  
+                odom_path.poses.push_back(transformed_plan[i]);  
                 sampling = 0;
             }
             total_length = total_length + _waypointsDist; 
@@ -263,6 +265,8 @@ namespace mpc_ros{
         cout << "coeffs : " << coeffs << endl;
         cout << "cte : " << cte << endl;
         cout << "etheta : " << etheta << endl;
+        ROS_WARN("[ROSNMPC] cte : %.4f", cte);
+        ROS_WARN("[ROSNMPC] etheta : %.4f", etheta);
 
         // Global coordinate system about theta
         double gx = 0;
@@ -328,7 +332,7 @@ namespace mpc_ros{
 
         // Display the MPC predicted trajectory
         _mpc_traj = nav_msgs::Path();
-        _mpc_traj.header.frame_id = "odom"; // points in car coordinate        
+        _mpc_traj.header.frame_id = "base_footprint"; // points in car coordinate        
         _mpc_traj.header.stamp = ros::Time::now();
 
         geometry_msgs::PoseStamped tempPose;
@@ -372,7 +376,7 @@ namespace mpc_ros{
             _mpc_params["REF_CTE"]  = _xy_tolerance;
             _mpc_params["REF_VEL"]  = _max_linear_speed;
             _mpc.LoadParams(_mpc_params);
-            ROS_WARN("[ROSNMPC] deceleration mode, current max linear speed %.2f", _max_linear_speed);
+            // ROS_WARN("[ROSNMPC] deceleration mode, current max linear speed %.2f", _max_linear_speed);
         }
         if (_dist < _xy_tolerance && _etheta < _yaw_tolerance){
             reached_state = ARRIVED;
@@ -431,7 +435,7 @@ namespace mpc_ros{
     {
         _g_path = *pathMsg;
         _l_path = *pathMsg;
-        if (!_g_path.poses.size() < 2){
+        if (!_g_path.poses.size() < 5){
             _arrival_state = TRACKING;
         }
     }
@@ -457,15 +461,12 @@ namespace mpc_ros{
                 iter_num = i;
                 continue;
             }
-            iter_num = lPath.poses.size() - iter_num;
-            cout << "local plan size: " << iter_num << endl;
             break;
         }
-        for (int j=iter_num - 1; j<iter_num; j++)
+        for (int j=iter_num; j<lPath.poses.size(); j++)
         {
             transformed_plan.push_back(lPath.poses[j]);
         }
-        cout << "transformed plan : " << transformed_plan.size() << endl;
     }
 
     void MPCPlannerROS::controlLoopCB(const ros::TimerEvent&)
@@ -481,6 +482,9 @@ namespace mpc_ros{
                 _arrival_state = NOT_WORKING;
                 _max_linear_speed = _default_max_linear_speed;
                 _max_angvel = _default_max_angular_speed;
+                std_srvs::SetBool _client;
+                _client.request.data = false;
+                _client_set_start.call(_client);
                 cmd_vel_pub_.publish(command_vel);
                 ROS_WARN("[ROSMPC] in control loop, arrival_state transition to NOT_WORKING from ARRIVED");
                 return;
