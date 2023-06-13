@@ -33,12 +33,8 @@ class Filter():
         self.Q = 0.01 * np.eye(6)
         self.R = 1000.0 * np.eye(6)
         
-        q = quaternion_from_euler(0, -1.5707, 0)
-        p = quaternion_from_euler(1.5707, 0, 0)
-        pq = quaternion_multiply(p, q)
-        pq_euler = euler_from_quaternion(pq)
+        self.swich = True
         
-        self.x = np.array([1, 0, 0.14, pq_euler[0], pq_euler[1], pq_euler[2]])
         self.P = 1.0 * np.eye(6)
         
     def cb(self, msg):
@@ -48,6 +44,14 @@ class Filter():
                                             self.marker_tf.transform.rotation.y,
                                             self.marker_tf.transform.rotation.z,
                                             self.marker_tf.transform.rotation.w])
+            if self.swich:
+                self.x = np.array([self.marker_tf.transform.translation.x,
+                                   self.marker_tf.transform.translation.y,
+                                   self.marker_tf.transform.translation.z,
+                                   euler[0],
+                                   euler[1],
+                                   euler[2]])
+                self.swich == False
             z_meas = np.array([self.marker_tf.transform.translation.x,
                                self.marker_tf.transform.translation.y,
                                self.marker_tf.transform.translation.z,
