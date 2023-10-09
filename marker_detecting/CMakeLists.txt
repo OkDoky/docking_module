@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_msgs
   tf2_ros
   tf
+  gazebo_ros
 )
 
 catkin_package()
@@ -18,4 +19,7 @@ catkin_install_python(PROGRAMS script/detecting_marker.py
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+)
+install(DIRECTORY models 
+DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
