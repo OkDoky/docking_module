@@ -36,6 +36,7 @@ namespace mpc_ros{
         l_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
         cmd_vel_pub_ = _nh.advertise<geometry_msgs::Twist>("cmd_vel", 1);
         mpc_state_pub_ = _nh.advertise<std_msgs::String>("mpc_state", 1);
+        cte_pub_ = _nh.advertise<std_msgs::Float64>("mpc_cte", 1);
 
         //Assuming this planner is being run within the navigation stack, we can
         //just do an upward search for the frequency at which its being run. This
@@ -85,7 +86,7 @@ namespace mpc_ros{
         _dt = double(1.0/_control_frequency);
         _default_max_linear_speed = _max_linear_speed;
         _default_max_angular_speed = _max_angvel;
-        _safety_speed = 0.08;
+        _safety_speed = 0.02;
 
         setParam();
 
@@ -94,6 +95,7 @@ namespace mpc_ros{
         _w = 0.0;
         _speed = 0.0;
         _arrival_state = NOT_WORKING;
+        str_state_before = "None";
         initialized_ = true;
         ROS_WARN("[ROSMPC] start to initialize timer event.");
         timer_ = nh_.createTimer(ros::Duration(_dt), &MPCPlannerROS::controlLoopCB, this);
@@ -211,23 +213,26 @@ namespace mpc_ros{
             _waypointsDist = sqrt(dx*dx + dy*dy);
             _downSampling = 2;
         }
-
-        // Cut and downsampling the path
-        for(int i =0; i< transformed_plan.size(); i++)
-        {
-            if(total_length > _path_length)
-                break;
-
-            if(sampling == _downSampling)
+        if (transformed_plan.size() > _downSampling*2){
+            // Cut and downsampling the path
+            for(int i =0; i< transformed_plan.size(); i++)
             {
-                odom_path.poses.push_back(transformed_plan[i]);  
-                sampling = 0;
+                if(total_length > _path_length)
+                    break;
+
+                if(sampling == _downSampling)
+                {
+                    odom_path.poses.push_back(transformed_plan[i]);  
+                    sampling = 0;
+                }
+                total_length = total_length + _waypointsDist; 
+                sampling = sampling + 1;  
             }
-            total_length = total_length + _waypointsDist; 
-            sampling = sampling + 1;  
+        } else{
+            odom_path.poses = transformed_plan;
         }
         
-        if(odom_path.poses.size() > 3)
+        if(odom_path.poses.size() > 1)
         {
             // publish odom path
             odom_path.header.frame_id = "odom";
@@ -262,11 +267,11 @@ namespace mpc_ros{
         auto coeffs = polyfit(x_veh, y_veh, 3); 
         const double cte  = polyeval(coeffs, 0.0);
         double etheta = atan(coeffs[1]);
-        cout << "coeffs : " << coeffs << endl;
-        cout << "cte : " << cte << endl;
-        cout << "etheta : " << etheta << endl;
-        ROS_WARN("[ROSNMPC] cte : %.4f", cte);
-        ROS_WARN("[ROSNMPC] etheta : %.4f", etheta);
+        std_msgs::Float64 cte_msg;
+        cte_msg.data = cte;
+        cte_pub_.publish(cte_msg);
+        // ROS_WARN("[ROSNMPC] cte : %.4f", cte);
+        // ROS_WARN("[ROSNMPC] etheta : %.4f", etheta);
 
         // Global coordinate system about theta
         double gx = 0;
@@ -363,27 +368,71 @@ namespace mpc_ros{
         return result_traj_;
     }
 
+    void MPCPlannerROS::runRotationMotion(geometry_msgs::Twist& cmd_vel){
+        double _etheta;
+        int _index = 0;
+        if (_arrival_state == ONLY_POSITION_ARRIVED)
+            int _index = _l_path.poses.size() - 1;
+        _etheta = tf::getYaw(_l_path.poses[_index].pose.orientation) - _rtheta;
+        cmd_vel.angular.z = _etheta + _yaw_tolerance*_etheta/abs(_etheta);
+    }
+
 	mpc_state MPCPlannerROS::getTrackingState(){
-        mpc_state reached_state = TRACKING;
+        mpc_state reached_state = _arrival_state;
         
         int last_index = _l_path.poses.size() - 1;
         double _dx = _l_path.poses[last_index].pose.position.x - _rx;
         double _dy = _l_path.poses[last_index].pose.position.y - _ry;
         double _dist = hypot(_dx, _dy);
         double _etheta = tf::getYaw(_l_path.poses[last_index].pose.orientation) - _rtheta;
-        if (_dist < (_max_linear_speed + _safety_speed)*1/_max_throttle){
-            _max_linear_speed = _max_throttle * _dist + _safety_speed;
-            _mpc_params["REF_CTE"]  = _xy_tolerance;
-            _mpc_params["REF_VEL"]  = _max_linear_speed;
-            _mpc.LoadParams(_mpc_params);
-            // ROS_WARN("[ROSNMPC] deceleration mode, current max linear speed %.2f", _max_linear_speed);
+        double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
+
+        switch(reached_state){
+            case GETPLAN:
+                if (abs(_heading_error) > _yaw_tolerance){
+                    reached_state = ROTATION;
+                    ROS_WARN("[ROSNMPC] state Transition GETPLAN -> ROTATION");
+                }
+                else {
+                    reached_state = TRACKING;
+                    ROS_WARN("[ROSNMPC] state Transition GETPLAN -> TRACKING");
+                }
+                return reached_state;
+            case ROTATION:
+                if (abs(_heading_error) < _yaw_tolerance){
+                    reached_state = TRACKING;
+                    ROS_WARN("[ROSNMPC] state Transition ROTATION -> TRACKING");
+                }
+                return reached_state;
+            case TRACKING:
+                if (_dist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
+                    reached_state = ARRIVED;
+                    ROS_WARN("[ROSNMPC] state Transition TRACKING -> ARRIVED");
+                }
+                else if (_dist < _xy_tolerance){
+                    reached_state = ONLY_POSITION_ARRIVED;
+                    ROS_WARN("[ROSNMPC] state Transition TRACKING -> ONLY_POSITION_ARRIVED");
+                }
+                // deceleration
+                if (_dist < (_max_linear_speed + _safety_speed)*1/_max_throttle){
+                    _max_linear_speed = _max_throttle * _dist + _safety_speed;
+                    // _mpc_params["REF_CTE"]  = _xy_tolerance;
+                    _mpc_params["REF_VEL"]  = _max_linear_speed;
+                    _mpc.LoadParams(_mpc_params);
+                    // ROS_WARN("[ROSNMPC] deceleration mode, dist : %.4f, linear speed : %.4f", _dist, _max_linear_speed);
+                }
+                return reached_state;
+            case ONLY_POSITION_ARRIVED:
+                if (_dist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
+                    reached_state = ARRIVED;
+                    ROS_WARN("[ROSNMPC] state Transition ONLY_POSITION_ARRIVED -> ARRIVED");
+                }
+                return reached_state;
+            case ARRIVED:
+                reached_state = NOT_WORKING;
+                ROS_WARN("[ROSNMPC] state Transition ARRIVED -> NOT_WORKING");
+                return reached_state;
         }
-        if (_dist < _xy_tolerance && _etheta < _yaw_tolerance){
-            reached_state = ARRIVED;
-        }
-        else if (_dist < _xy_tolerance)
-            reached_state = ONLY_POSITION_ARRIVED;
-        return reached_state;
     }
 
     // Evaluate a polynomial.
@@ -435,8 +484,13 @@ namespace mpc_ros{
     {
         _g_path = *pathMsg;
         _l_path = *pathMsg;
-        if (!_g_path.poses.size() < 5){
-            _arrival_state = TRACKING;
+        ROS_WARN("[ROSNMPC] get new plan");
+        if (!_g_path.poses.size() < 10){
+            if (_arrival_state == NOT_WORKING){
+                ROS_WARN("[ROSNMPC] current path size : %d", _g_path.poses.size());
+                _arrival_state = GETPLAN;
+                ROS_WARN("[ROSNMPC] state Transition NOT_WORKING -> GETPLAN");
+            }
         }
     }
 
@@ -473,27 +527,44 @@ namespace mpc_ros{
     {
         std_msgs::String str_state;
         str_state.data = enumToString(_arrival_state);
-        mpc_state_pub_.publish(str_state);
+        if (str_state.data != str_state_before){
+            mpc_state_pub_.publish(str_state);
+            str_state_before = str_state.data;
+        }    
         if (_arrival_state == NOT_WORKING) return;
         _arrival_state = getTrackingState();
         geometry_msgs::Twist command_vel;
-        if (!_arrival_state == NOT_WORKING){
-            if (_arrival_state == ARRIVED){
-                _arrival_state = NOT_WORKING;
+        
+        switch (_arrival_state){
+            case ROTATION:
+                runRotationMotion(command_vel);
+                cmd_vel_pub_.publish(command_vel);
+                break;
+            case TRACKING:{
+                bool computeDone = computeVelocityCommands(command_vel);
+                if (computeDone){
+                    cmd_vel_pub_.publish(command_vel);
+                }
+                break;
+            }
+            case ONLY_POSITION_ARRIVED:
+                runRotationMotion(command_vel);
+                cmd_vel_pub_.publish(command_vel);
+                break;
+            case ARRIVED:{
                 _max_linear_speed = _default_max_linear_speed;
                 _max_angvel = _default_max_angular_speed;
                 std_srvs::SetBool _client;
                 _client.request.data = false;
                 _client_set_start.call(_client);
                 cmd_vel_pub_.publish(command_vel);
-                ROS_WARN("[ROSMPC] in control loop, arrival_state transition to NOT_WORKING from ARRIVED");
-                return;
+                ROS_WARN("[ROSNMPC] in control loop, arrival_state transition to NOT_WORKING from ARRIVED");
+                ROS_WARN("[ROSNMPC] goal x : %.4f, goal y : %.4f, robot x : %.4f, robot y : %.4f", _l_path.poses[_l_path.poses.size()-1].pose.position.x,
+                    _l_path.poses[_l_path.poses.size()-1].pose.position.y, _odom.pose.pose.position.x, _odom.pose.pose.position.y);
+                break;
             }
-            bool computeDone = computeVelocityCommands(command_vel);
-            if (computeDone){
-                ROS_WARN("[ROSMPC] compute velocity, \nlinear.x : %.5f\nangular.z : %.5f", command_vel.linear.x, command_vel.angular.z);
-                cmd_vel_pub_.publish(command_vel);
-            }
+            default:
+                break;
         }
     }
 }

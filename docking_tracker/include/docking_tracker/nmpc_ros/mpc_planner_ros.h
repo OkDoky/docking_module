@@ -41,6 +41,7 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/Float64.h>
 #include <std_srvs/SetBool.h>
 
 #include <nav_msgs/Path.h>
@@ -54,6 +55,8 @@ using namespace std;
 
 enum mpc_state{
     NOT_WORKING,
+    GETPLAN,
+    ROTATION,
     TRACKING,
     ONLY_POSITION_ARRIVED,
     ARRIVED 
@@ -63,6 +66,10 @@ std::string enumToString(mpc_state state){
     switch (state){
         case NOT_WORKING:
             return "NOT_WORKING";
+        case GETPLAN:
+            return "GETPLAN";
+        case ROTATION:
+            return "ROTATION";
         case TRACKING:
             return "TRACKING";
         case ONLY_POSITION_ARRIVED:
@@ -92,6 +99,7 @@ namespace mpc_ros{
                                             const std::vector<geometry_msgs::PoseStamped> transformed_plan);
             Trajectory findBestPath(geometry_msgs::Twist& drive_velocities,
                                     const std::vector<geometry_msgs::PoseStamped> transformed_plan);
+            void runRotationMotion(geometry_msgs::Twist& cmd_vel);
             mpc_state getTrackingState();
             void setParam(); 
             void getLocalPlan(std::vector<geometry_msgs::PoseStamped>& transformed_plan);
@@ -114,6 +122,7 @@ namespace mpc_ros{
             ros::Subscriber _sub_odom, _sub_global_plan;
             ros::Publisher _pub_downsampled_path, _pub_mpctraj;
             ros::Publisher cmd_vel_pub_;
+            ros::Publisher cte_pub_;
             ros::ServiceClient _client_set_start;
             tf2_ros::Buffer *tf_;  ///
             
@@ -145,6 +154,7 @@ namespace mpc_ros{
             bool _debug_info, _delay_mode;
             double polyeval(Eigen::VectorXd coeffs, double x);
             Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals, int order);
+            std::string str_state_before;
 
             void odomCB(const nav_msgs::Odometry::ConstPtr& odomMsg);
             void pathCB(const nav_msgs::Path::ConstPtr& pathMsg);
