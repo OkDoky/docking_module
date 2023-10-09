@@ -37,4 +37,4 @@ echo 'export ROS_HOSTNAME=localhost' >> ~/.bashrc
 echo 'export ROS_MASTER_URI=http://localhost:11311' >> ~/.bashrc
 
 source ~/.bashrc
-cd ~/catkin_ws && catkin_make -DCMAKE_BUILD_TYPE=Release
+# cd ~/catkin_ws && catkin_make -DCMAKE_BUILD_TYPE=Release
