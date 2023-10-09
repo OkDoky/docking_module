@@ -8,6 +8,7 @@ import math
 import numpy as np
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry, Path
+from std_msgs.msg import String
 from geometry_msgs.msg import PointStamped, QuaternionStamped, Point, Quaternion, PoseStamped, TransformStamped
 from tf.transformations import quaternion_matrix, quaternion_from_matrix
 sys.path.append(os.path.dirname(__file__))
@@ -80,6 +81,11 @@ def callback_arucoTF(tf_data):
 def callback_odomTF(sub_odom):
     global robot_odom
     robot_odom = sub_odom
+    
+def callback_tracking_state(msg):
+    global backup_pose
+    if msg.data == "NOT_WORKING":
+        backup_pose = Point()
 
 def get_rotation_angle(p1, p2):
     v = (p2[0]-p1[0], p2[1]-p1[1])
@@ -103,7 +109,14 @@ def get_rotation_angle(p1, p2):
     return angle
 
 def cal_plan(displacement, marekr_displacement):
-    global Aurco_tf, robot_odom
+    def getEuclidianDistance(new_point, backup_point):
+        dx = new_point.x - backup_point.x
+        dy = new_point.y - backup_point.y
+        dist = math.hypot(dy, dx)
+        return dist
+    
+    global Aurco_tf, robot_odom, backup_pose
+    isChange = True
     # if len(Aurco_tf.transforms) != 0 and robot_odom.header.frame_id != "":
     if (Aurco_tf) != None and robot_odom.header.frame_id != "":
         tf_trans = Aurco_tf.transform.translation
@@ -122,6 +135,11 @@ def cal_plan(displacement, marekr_displacement):
         v = np.array([point.x, point.y, point.z, 1]) # offset point
         v_new = np.dot(origin_matrix,v) # offset point
         point_new = Point(x=v_new[0], y=v_new[1], z=v_new[2]) # offset point
+        
+        if (getEuclidianDistance(point_new, backup_pose) < 0.02):
+            isChange = False
+            return Path(), isChange
+        backup_pose = point_new
 
         start_point = Point(x=robot_odom.pose.pose.position.x, y=robot_odom.pose.pose.position.y, z=0.) # now robot odom position
         q = (
@@ -143,12 +161,13 @@ def cal_plan(displacement, marekr_displacement):
         # print("origin_pose")
         # print(origin_pos)
         # print("------------------")
-        return compute_plan(start_point, np.rad2deg(robot_angle[2]), point_new, get_rotation_angle(v_new,origin_new), origin_pos, q)
-    else: return Path()
+        return compute_plan(start_point, np.rad2deg(robot_angle[2]), point_new, get_rotation_angle(v_new,origin_new), origin_pos, q), isChange
+    else: return Path(), isChange
 
 def sub_TF():
-    global callback_trigger
+    global callback_trigger, backup_pose
     callback_trigger = False
+    backup_pose = Point()
     rospy.init_node('subscribeTF', anonymous=True)
     path_displacement = float(rospy.get_param("~path_displacement"))
     robot_size = float(rospy.get_param("~robot_size"))
@@ -159,14 +178,16 @@ def sub_TF():
     # rospy.Subscriber("tf_list", TFMessage, callback_arucoTF)
     rospy.Subscriber("filtered_tf", TransformStamped, callback_arucoTF)
     rospy.Subscriber("odom", Odometry, callback_odomTF)
+    rospy.Subscriber("mpc_state", String, callback_tracking_state)
     pub = rospy.Publisher('compute_Path', Path, queue_size=10)
     while not rospy.is_shutdown():
         if not callback_trigger:
             rospy.sleep(0.1)
             continue
-        plan = cal_plan(path_displacement, robot_size+marker_displacement)
+        plan,isChange = cal_plan(path_displacement, robot_size+marker_displacement)
         if len(plan.poses) != 0:
-            pub.publish(plan)
+            if isChange:
+                pub.publish(plan)
             callback_trigger = False
         rospy.sleep(0.1)
     
