@@ -60,7 +60,8 @@ bool set_start = false;
 
 tf2_ros::Buffer tfBuffer;
 
-#define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
+// #define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
+#define SSTR(x) static_cast<std::ostringstream&&>(std::ostringstream() << std::dec << x).str()
 #define ROUND2(x) std::round(x * 100) / 100
 #define ROUND3(x) std::round(x * 1000) / 1000
 
@@ -428,7 +429,7 @@ int main(int argc, char **argv) {
 
     tf2_ros::TransformListener tfListener(tfBuffer);
     detector_params = aruco::DetectorParameters::create();
-    detector_params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
+    // detector_params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
     nh.param("dictionary_name", dictionary_name, string("DICT_4X4_250"));
     nh.param("aruco_adaptiveThreshWinSizeStep", detector_params->adaptiveThreshWinSizeStep, 4);
     int queue_size = 10;
