@@ -1,0 +1,14 @@
+<launch>
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+
+    <include file="$(find marker_detecting)/launch/detecting_marker.launch">
+        <arg name="camera" default="/camera/color/image_raw" />
+        <arg name="camera_info" default="/camera/color/camera_info" />
+        <arg name="marker_id"	    value="7"/>
+    </include>
+
+    <include file="$(find docking_planner)/launch/generate_path.launch"/>
+    <include file="$(find docking_tracker)/launch/path_tracking.launch"/>
+    
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find docking_gazebo)/rviz/robot_rit.rviz"/>    
+</launch>
