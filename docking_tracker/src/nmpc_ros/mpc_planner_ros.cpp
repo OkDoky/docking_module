@@ -83,6 +83,8 @@ namespace mpc_ros{
         private_nh.param<double>("min_linear_speed", _min_linear_speed, -0.3);
         private_nh.param<double>("xy_tolerance", _xy_tolerance, 0.05);
         private_nh.param<double>("yaw_tolerance", _yaw_tolerance, 0.05);
+        private_nh.param<double>("line_direction_angle", _line_direction_angle, 90);
+        private_nh.param<double>("line_offset_distance", _line_offset_distance, 0.03);
         _dt = double(1.0/_control_frequency);
         _default_max_linear_speed = _max_linear_speed;
         _default_max_angular_speed = _max_angvel;
@@ -377,13 +379,31 @@ namespace mpc_ros{
         cmd_vel.angular.z = _etheta + _yaw_tolerance*_etheta/abs(_etheta);
     }
 
+    double MPCPlannerROS::distanceToLine(double posX, double posY, double lineStartX, double lineStartY, double lineDirectionAngle, double offsetDistance) {
+        double perpendicularDirection = lineDirectionAngle + 90.0;
+        double perpendicularDirectionRadian = perpendicularDirection * M_PI / 180.0;
+        double offsetX = offsetDistance * std::cos(perpendicularDirectionRadian);
+        double offsetY = offsetDistance * std::sin(perpendicularDirectionRadian);
+        double goalX = lineStartX + offsetX;
+        double goalY = lineStartY + offsetY;
+        double lineDirectionRadian = lineDirectionAngle * M_PI / 180.0;
+        double dx = posX - goalX;
+        double dy = posY - goalY;
+        double dotProduct = dx * std::cos(lineDirectionRadian) + dy * std::sin(lineDirectionRadian);
+        double closestPointX = lineStartX + dotProduct * std::cos(lineDirectionRadian);
+        double closestPointY = lineStartY + dotProduct * std::sin(lineDirectionRadian);
+        return std::sqrt((posX - closestPointX) * (posX - closestPointX) +
+                         (posY - closestPointY) * (posY - closestPointY));
+    }
+
 	mpc_state MPCPlannerROS::getTrackingState(){
         mpc_state reached_state = _arrival_state;
         
         int last_index = _l_path.poses.size() - 1;
         double _dx = _l_path.poses[last_index].pose.position.x - _rx;
         double _dy = _l_path.poses[last_index].pose.position.y - _ry;
-        double _dist = hypot(_dx, _dy);
+        double _pdist = hypot(_dx, _dy);
+        double _ldist = distanceToLine(_rx, _ry, _l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y, _line_direction_angle, _line_offset_distance);
         double _etheta = tf::getYaw(_l_path.poses[last_index].pose.orientation) - _rtheta;
         double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
 
@@ -405,17 +425,22 @@ namespace mpc_ros{
                 }
                 return reached_state;
             case TRACKING:
-                if (_dist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
+                if (_pdist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
                     reached_state = ARRIVED;
                     ROS_WARN("[ROSNMPC] state Transition TRACKING -> ARRIVED");
                 }
-                else if (_dist < _xy_tolerance){
+                else if (_pdist < _xy_tolerance){
                     reached_state = ONLY_POSITION_ARRIVED;
                     ROS_WARN("[ROSNMPC] state Transition TRACKING -> ONLY_POSITION_ARRIVED");
                 }
+                else if (_ldist < 0.02) {
+                    reached_state = NOT_WORKING;
+                    ROS_WARN("[ROSNMPC] state Transition TRACKING -> NOT_WORKING");
+                    ROS_ERROR("[ROSNMPC] robot cross the errorline without reaching the goal");
+                }
                 // deceleration
-                if (_dist < (_max_linear_speed + _safety_speed)*1/_max_throttle){
-                    _max_linear_speed = _max_throttle * _dist + _safety_speed;
+                if (_pdist < (_max_linear_speed + _safety_speed)*1/_max_throttle){
+                    _max_linear_speed = _max_throttle * _pdist + _safety_speed;
                     // _mpc_params["REF_CTE"]  = _xy_tolerance;
                     _mpc_params["REF_VEL"]  = _max_linear_speed;
                     _mpc.LoadParams(_mpc_params);
@@ -423,7 +448,7 @@ namespace mpc_ros{
                 }
                 return reached_state;
             case ONLY_POSITION_ARRIVED:
-                if (_dist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
+                if (_pdist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
                     reached_state = ARRIVED;
                     ROS_WARN("[ROSNMPC] state Transition ONLY_POSITION_ARRIVED -> ARRIVED");
                 }
@@ -481,13 +506,17 @@ namespace mpc_ros{
     }
 
     void MPCPlannerROS::pathCB(const nav_msgs::Path::ConstPtr& pathMsg)
-    {
+    {   
         _g_path = *pathMsg;
-        _l_path = *pathMsg;
-        ROS_WARN("[ROSNMPC] get new plan");
-        if (!_g_path.poses.size() < 10){
+        int last_index = _g_path.poses.size() - 1;
+        double _dx = _g_path.poses[last_index].pose.position.x - _rx;
+        double _dy = _g_path.poses[last_index].pose.position.y - _ry;
+        double _dist = hypot(_dx, _dy);
+        if (!_g_path.poses.size() < 10 && _dist > 0.05){
             if (_arrival_state == NOT_WORKING){
+                ROS_WARN("[ROSNMPC] get new plan");
                 ROS_WARN("[ROSNMPC] current path size : %d", _g_path.poses.size());
+                _l_path = *pathMsg;
                 _arrival_state = GETPLAN;
                 ROS_WARN("[ROSNMPC] state Transition NOT_WORKING -> GETPLAN");
             }
@@ -521,6 +550,7 @@ namespace mpc_ros{
         {
             transformed_plan.push_back(lPath.poses[j]);
         }
+        _l_path.poses = transformed_plan;
     }
 
     void MPCPlannerROS::controlLoopCB(const ros::TimerEvent&)
@@ -531,9 +561,13 @@ namespace mpc_ros{
             mpc_state_pub_.publish(str_state);
             str_state_before = str_state.data;
         }    
-        if (_arrival_state == NOT_WORKING) return;
-        _arrival_state = getTrackingState();
+
         geometry_msgs::Twist command_vel;
+        if (_arrival_state == NOT_WORKING) {
+            cmd_vel_pub_.publish(command_vel);
+            return;
+        }
+        _arrival_state = getTrackingState();
         
         switch (_arrival_state){
             case ROTATION:
