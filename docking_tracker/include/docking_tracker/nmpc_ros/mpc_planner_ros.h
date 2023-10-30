@@ -100,6 +100,7 @@ namespace mpc_ros{
             Trajectory findBestPath(geometry_msgs::Twist& drive_velocities,
                                     const std::vector<geometry_msgs::PoseStamped> transformed_plan);
             void runRotationMotion(geometry_msgs::Twist& cmd_vel);
+            double distanceToLine(double posX, double posY, double lineStartX, double lineStartY, double lineDirectionAngle, double offsetDistance);
             mpc_state getTrackingState();
             void setParam(); 
             void getLocalPlan(std::vector<geometry_msgs::PoseStamped>& transformed_plan);
@@ -134,7 +135,7 @@ namespace mpc_ros{
             double _fvx, _fvy, _fvw; // linear x vel, linear y vel, angular yaw vel
 
             // init goal tolerance
-            double _xy_tolerance, _yaw_tolerance;
+            double _xy_tolerance, _yaw_tolerance, _line_direction_angle, _line_offset_distance;
 
             double _default_max_linear_speed, _default_max_angular_speed;
             double _safety_speed;
