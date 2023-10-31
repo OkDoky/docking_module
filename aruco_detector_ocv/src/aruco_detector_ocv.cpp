@@ -60,7 +60,8 @@ bool set_start = false;
 
 tf2_ros::Buffer tfBuffer;
 
-#define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
+// #define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
+#define SSTR(x) ((std::ostringstream() << std::dec << x).str())
 #define ROUND2(x) std::round(x * 100) / 100
 #define ROUND3(x) std::round(x * 1000) / 1000
 
@@ -411,6 +412,7 @@ int main(int argc, char **argv) {
     // Initalize ROS node
     ros::init(argc, argv, "aruco_detector_ocv");
     ros::NodeHandle nh("~");
+    ros::NodeHandle _nh("");
     string rgb_topic, rgb_info_topic, dictionary_name;
     nh.param("camera", rgb_topic, string("/kinect2/hd/image_color_rect"));
     nh.param("camera_info", rgb_info_topic, string("/kinect2/hd/camera_info"));
@@ -428,7 +430,7 @@ int main(int argc, char **argv) {
 
     tf2_ros::TransformListener tfListener(tfBuffer);
     detector_params = aruco::DetectorParameters::create();
-    detector_params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
+    // detector_params->cornerRefinementMethod = aruco::CORNER_REFINE_SUBPIX;
     nh.param("dictionary_name", dictionary_name, string("DICT_4X4_250"));
     nh.param("aruco_adaptiveThreshWinSizeStep", detector_params->adaptiveThreshWinSizeStep, 4);
     int queue_size = 10;
@@ -440,17 +442,17 @@ int main(int argc, char **argv) {
     if (show_detections) {
        // namedWindow("markers", cv::WINDOW_KEEPRATIO);
     }
-    ros::Subscriber rgb_sub = nh.subscribe(rgb_topic.c_str(), queue_size, callback);
-    ros::Subscriber rgb_info_sub = nh.subscribe(rgb_info_topic.c_str(), queue_size, callback_camera_info);
-    ros::Subscriber parameter_sub = nh.subscribe("/update_params", queue_size, update_params_cb);
-    ros::ServiceServer start_ser = nh.advertiseService("/set_start", startCB);
+    ros::Subscriber rgb_sub = _nh.subscribe(rgb_topic.c_str(), queue_size, callback);
+    ros::Subscriber rgb_info_sub = _nh.subscribe(rgb_info_topic.c_str(), queue_size, callback_camera_info);
+    ros::Subscriber parameter_sub = _nh.subscribe("update_params", queue_size, update_params_cb);
+    ros::ServiceServer start_ser = _nh.advertiseService("set_start", startCB);
 
     // Publisher:
   image_transport::ImageTransport it(nh);
-  result_img_pub_ = it.advertise("/result_img", 1);
-  tf_list_pub_    = nh.advertise<tf2_msgs::TFMessage>("/tf_list", 10);
+  result_img_pub_ = it.advertise("result_img", 1);
+  tf_list_pub_    = _nh.advertise<tf2_msgs::TFMessage>("tf_list", 10);
 
-  aruco_info_pub_ = nh.advertise<alfons_msgs::ArucoInfo>("/aruco_list", 10);
+  aruco_info_pub_ = _nh.advertise<alfons_msgs::ArucoInfo>("aruco_list", 10);
 
     ros::spin();
     return 0;
