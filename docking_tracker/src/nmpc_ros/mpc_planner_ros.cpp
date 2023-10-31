@@ -433,11 +433,11 @@ namespace mpc_ros{
                     reached_state = ONLY_POSITION_ARRIVED;
                     ROS_WARN("[ROSNMPC] state Transition TRACKING -> ONLY_POSITION_ARRIVED");
                 }
-                else if (_ldist < 0.02) {
-                    reached_state = NOT_WORKING;
-                    ROS_WARN("[ROSNMPC] state Transition TRACKING -> NOT_WORKING");
-                    ROS_ERROR("[ROSNMPC] robot cross the errorline without reaching the goal");
-                }
+                // else if (_ldist < 0.02) {
+                //     reached_state = NOT_WORKING;
+                //     ROS_WARN("[ROSNMPC] state Transition TRACKING -> NOT_WORKING");
+                //     ROS_ERROR("[ROSNMPC] robot cross the errorline without reaching the goal");
+                // }
                 // deceleration
                 if (_pdist < (_max_linear_speed + _safety_speed)*1/_max_throttle){
                     _max_linear_speed = _max_throttle * _pdist + _safety_speed;
