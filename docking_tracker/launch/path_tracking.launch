@@ -29,6 +29,6 @@
         <param name="line_direction_angle"      value="90"/>
         <param name="line_offset_distance"      value="0.0"/>
         
-        <remap from="/plan"                     to="/compute_Path"/>
+        <remap from="/plan"                     to="compute_Path"/>
     </node>
 </launch>
