@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 import rospy
 import os
@@ -53,7 +54,11 @@ def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, frame
     line_start = np.array([end_point.x, end_point.y, 0])
     line_end = np.array([straight_end.x, straight_end.y, 0])
     dist = int(np.linalg.norm(line_end - line_start)*100 + 1)
-    points = np.linspace(line_start, line_end, dist)
+    x_points = np.linspace(line_start[0], line_end[0], dist)
+    y_points = np.linspace(line_start[1], line_end[1], dist)
+    z_points = np.linspace(line_start[2], line_end[2], dist)
+    # points = np.linspace(line_start, line_end, dist)
+    points = np.vstack((x_points, y_points, z_points)).T
 
     for point in points:
         pose_stamped = PoseStamped()

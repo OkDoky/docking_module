@@ -1,6 +1,7 @@
+#! /usr/bin/python
 import math
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 
 # parameter
@@ -130,23 +131,23 @@ def quintic_polynomials_planner(sx, sy, syaw, gx, gy, gyaw, dt, sv = 0.0, sa=0.0
             print("find path!!")
             break
 
-    if show_animation:  # pragma: no cover
-        for i, _ in enumerate(time):
-            plt.cla()
-            # for stopping simulation with the esc key.
-            plt.gcf().canvas.mpl_connect('key_release_event',
-                                         lambda event: [exit(0) if event.key == 'escape' else None])
-            plt.grid(True)
-            plt.axis("equal")
-            plot_arrow(sx, sy, syaw)
-            plot_arrow(gx, gy, gyaw)
-            plot_arrow(rx[i], ry[i], ryaw[i])
-            plt.title("Time[s]:" + str(time[i])[0:4] +
-                      " v[m/s]:" + str(rv[i])[0:4] +
-                      " a[m/ss]:" + str(ra[i])[0:4] +
-                      " jerk[m/sss]:" + str(rj[i])[0:4],
-                      )
-            plt.pause(0.001)
+    # if show_animation:  # pragma: no cover
+    #     for i, _ in enumerate(time):
+    #         plt.cla()
+    #         # for stopping simulation with the esc key.
+    #         plt.gcf().canvas.mpl_connect('key_release_event',
+    #                                      lambda event: [exit(0) if event.key == 'escape' else None])
+    #         plt.grid(True)
+    #         plt.axis("equal")
+    #         plot_arrow(sx, sy, syaw)
+    #         plot_arrow(gx, gy, gyaw)
+    #         plot_arrow(rx[i], ry[i], ryaw[i])
+    #         plt.title("Time[s]:" + str(time[i])[0:4] +
+    #                   " v[m/s]:" + str(rv[i])[0:4] +
+    #                   " a[m/ss]:" + str(ra[i])[0:4] +
+    #                   " jerk[m/sss]:" + str(rj[i])[0:4],
+    #                   )
+    #         plt.pause(0.001)
 
     return time, rx, ry, ryaw, rv, ra, rj
 
@@ -159,8 +160,8 @@ def plot_arrow(x, y, yaw, length=0.1, width=0.05, fc="r", ec="k"):  # pragma: no
     if not isinstance(x, float):
         for (ix, iy, iyaw) in zip(x, y, yaw):
             plot_arrow(ix, iy, iyaw)
-    else:
-        plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw),
-                  fc=fc, ec=ec, head_width=width, head_length=width)
-        plt.plot(x, y)
+    # else:
+    #     plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw),
+    #               fc=fc, ec=ec, head_width=width, head_length=width)
+    #     plt.plot(x, y)
 
