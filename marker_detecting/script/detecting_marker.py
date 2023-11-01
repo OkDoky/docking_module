@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#! /usr/bin/python
 import numpy as np
 from numpy.linalg import inv
 
@@ -144,25 +144,15 @@ class Filter():
     #                                     self.marker_tf.transform.rotation.w])
     #                     self.swich = True
                         
-    def kalman_filter(self, z_meas):
-        # x_pred = self.A @ self.x
-        # P_pred = self.A @ self.P @ self.A.T + self.Q
-        
-        # K = P_pred @ self.H.T @ inv(self.H @ P_pred @ self.H.T + self.R)
-        
-        # self.x = x_pred + K @ (z_meas - self.H @ x_pred)
-        
-        # self.P = P_pred - K @ self.H @ P_pred
-        
+    def kalman_filter(self, z_meas):        
         x_pred = np.dot(self.A, self.x)
         P_pred = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
-        
-        K = np.dot(np.dot(P_pred, self.H.T), inv(np.dot(np.dot(self.H ,P_pred), self.H.T) + self.R))
-        
+
+        K = np.dot(np.dot(P_pred, self.H.T), inv(np.dot(np.dot(self.H, P_pred), self.H.T) + self.R))
+
         self.x = x_pred + np.dot(K, (z_meas - np.dot(self.H, x_pred)))
-        
+
         self.P = P_pred - np.dot(np.dot(K, self.H), P_pred)
-        
 
 
 if __name__ == '__main__':
