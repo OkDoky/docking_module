@@ -445,7 +445,7 @@ int main(int argc, char **argv) {
     ros::Subscriber rgb_sub = _nh.subscribe(rgb_topic.c_str(), queue_size, callback);
     ros::Subscriber rgb_info_sub = _nh.subscribe(rgb_info_topic.c_str(), queue_size, callback_camera_info);
     ros::Subscriber parameter_sub = _nh.subscribe("update_params", queue_size, update_params_cb);
-    ros::ServiceServer start_ser = _nh.advertiseService("set_start", startCB);
+    ros::ServiceServer start_ser = _nh.advertiseService("set_docking", startCB);
 
     // Publisher:
   image_transport::ImageTransport it(nh);
