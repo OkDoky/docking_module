@@ -564,7 +564,7 @@ namespace mpc_ros{
 
         geometry_msgs::Twist command_vel;
         if (_arrival_state == NOT_WORKING) {
-            cmd_vel_pub_.publish(command_vel);
+            // cmd_vel_pub_.publish(command_vel);
             return;
         }
         _arrival_state = getTrackingState();
