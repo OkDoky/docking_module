@@ -1,7 +1,11 @@
 <launch>
+    <arg name="path_displacement"   default="0.5"/>
+    <arg name="robot_size"          default="0.2"/>
+    <arg name="marker_displacement" default="0.05"/>
+    
     <node name="path_generate" pkg="docking_planner" type="transform.py" output="screen">
-        <param name="path_displacement" type="double" value="0.5"/>
-        <param name="robot_size" type="double" value="0.1"/>
-        <param name="marker_displacement" type="double" value="0.05"/>
+        <param name="path_displacement" type="double" value="$(arg path_displacement)"/>
+        <param name="robot_size" type="double" value="$(arg robot_size)"/>
+        <param name="marker_displacement" type="double" value="$(arg marker_displacement)"/>
     </node>
 </launch>
