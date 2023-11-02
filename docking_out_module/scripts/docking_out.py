@@ -9,6 +9,7 @@ from copy import deepcopy
 from geometry_msgs.msg import Twist, Pose2D
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
+from std_msgs.msg import String
 from std_srvs.srv import SetBoolResponse, SetBool
 from shapely.geometry import Polygon, Point
 
@@ -18,13 +19,12 @@ D_STOPPED = 2
 D_DONE = 3
 D_ERROR = 4
 
+status_dict = {D_WATTING: "WAITTING", D_MOVING: "MOVING", D_STOPPED: "STOPPED", D_DONE: "ARRIVED", D_ERROR: "ERROR"}
+
 class DockingOUT:
     def __init__(self):
         rospy.init_node("DockingOut")
-        polygon = np.array(eval(rospy.get_param("move_base/local_costmap/footprint", [[-0.105,-0.105],[-0.105,0.105],[0.105,0.105],[0.105,-0.105]])))
-        rospy.logwarn(polygon)
-        _sfp = [(point[0], point[1]) for point in polygon]
-        self.footprint = Polygon(_sfp)
+        self.footprint = None
         self.rpose = Pose2D()
         self.scan = LaserScan()
         self.direction = -1
@@ -36,22 +36,31 @@ class DockingOUT:
         self.subs.append(rospy.Subscriber("odom", Odometry, self._odom_callback))
         self.srvs.append(rospy.Service("set_docking_out", SetBool, self.docking_trigger))
         self.pubs['cmd'] = rospy.Publisher("cmd_vel", Twist, queue_size=1)
+        self.pubs['state'] = rospy.Publisher("docking_out/status", String, queue_size=1)
         self.is_running = False
         self.is_paused = False
         self.is_detected = False
+        self.is_canceled = False
         self.status = D_WATTING
         rospy.spin()
     
     def docking_trigger(self, req):
-        dist = float(rospy.get_param("docking_out/dist", 0.5))
-        self.run(dist)
+        if req.data:
+            dist = float(rospy.get_param("~dist", 0.5))
+            if self.footprint == None:
+                polygon = np.array(eval(rospy.get_param("move_base/local_costmap/footprint", [[-0.105,-0.105],[-0.105,0.105],[0.105,0.105],[0.105,-0.105]])))
+                _sfp = [(point[0], point[1]) for point in polygon]
+                self.footprint = Polygon(_sfp)
+            self.run(dist)
+        else:
+            self.is_canceled = True
+
         res = SetBoolResponse()
         res.success = True
         return res
     
     def run(self, dist):
         self.is_running = True
-        rospy.logwarn("start to make thread")
         _docking_out = Thread(target=self.execute_callback, args=(dist,))
         _docking_out.daemon = True
         _docking_out.start()
@@ -63,6 +72,7 @@ class DockingOUT:
             self.is_running = False
             self.is_paused = False
             self.is_detected = False
+            self.is_canceled = False
             return True
         else:
             return False
@@ -87,9 +97,9 @@ class DockingOUT:
                 if self.is_paused:
                     continue
                 current_p = deepcopy(self.rpose)
-                if self._dist_btw_2_point(start_p, current_p) > dist:
+                if self._dist_btw_2_point(start_p, current_p) > dist or self.is_canceled:
                     self.status = D_DONE
-                    rospy.logwarn("[Done] start p : %s, end p : %s"%(start_p, current_p))
+                    rospy.logwarn("[Done] start p : %s, end p : %s, %f"%(start_p, current_p, self._dist_btw_2_point(start_p, current_p)))
                     cmd.linear.x = 0.0
                     self.pubs['cmd'].publish(cmd)
                     break
@@ -108,7 +118,8 @@ class DockingOUT:
                 rospy.logwarn("except %s"%traceback.format_exc())
             finally:
                 rospy.sleep(0.1)
-                rospy.logwarn("current state : %d"%self.status)
+                self.pubs['state'].publish(status_dict[self.status])
+
         
     def _scan_in_polygon(self, scan):
         distances = np.array(scan.ranges)
@@ -118,6 +129,7 @@ class DockingOUT:
         inside_mask = np.array([self.footprint.contains(Point(pt)) for pt in points])
         distances_inside = distances[inside_mask]
         if len(distances_inside)>0:
+            rospy.logwarn("[DockingOut] %d point is inside footprint"%len(distances_inside))
             return True
         else:
             return False
