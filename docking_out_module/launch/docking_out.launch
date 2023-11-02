@@ -1,5 +1,7 @@
 <launch>
-    <node pkg="docking_out_module" name="docking_out" type="docking_out.py" ns="r1">
+    <arg name="dist"        default="0.5"/>
+    <node pkg="docking_out_module" name="docking_out" type="docking_out.py">
+        <param name="dist" value="$(arg dist)"/>
         <remap from="scan" to="scan_filtered"/>
     </node>
 </launch>
