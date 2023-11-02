@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="docking_out_module" name="docking_out" type="docking_out.py" ns="r1">
+        <remap from="scan" to="scan_filtered"/>
+    </node>
+</launch>
