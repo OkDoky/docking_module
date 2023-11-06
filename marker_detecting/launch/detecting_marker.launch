@@ -1,8 +1,8 @@
 <launch>
     <arg name="image_width" default="1920" /> <!-- 640, 1920 -->
     <arg name="image_height" default="1080" /> <!-- 480, 1080 -->
-    <arg name="camera" default="camera/color/image_raw" />
-    <arg name="camera_info" default="camera/color/camera_info" />
+    <arg name="camera" default="camera/rgb/image_raw" />
+    <arg name="camera_info" default="camera/rgb/camera_info" />
     <arg name="tf_prefix" default="marker_id" />
     <arg name="show_detections" default="true" />
     <arg name="marker_size" default="0.1" doc="length of the physical marker's side in meters"/>

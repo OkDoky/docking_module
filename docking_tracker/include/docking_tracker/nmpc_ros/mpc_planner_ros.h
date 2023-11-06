@@ -135,7 +135,7 @@ namespace mpc_ros{
             double _fvx, _fvy, _fvw; // linear x vel, linear y vel, angular yaw vel
 
             // init goal tolerance
-            double _xy_tolerance, _yaw_tolerance, _line_direction_angle, _line_offset_distance;
+            double _xy_tolerance, _yaw_tolerance, _line_offset_distance;
 
             double _default_max_linear_speed, _default_max_angular_speed;
             double _safety_speed;

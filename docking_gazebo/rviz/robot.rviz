@@ -4,8 +4,10 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /TF1
         - /TF1/Frames1
         - /TF1/Tree1
+        - /local_plan1
       Splitter Ratio: 0.5
     Tree Height: 584
   - Class: rviz/Selection
@@ -382,7 +384,7 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 194.4186553955078
+      Scale: 319.6071472167969
       Target Frame: <Fixed Frame>
       X: 1.1598066091537476
       Y: 0.1027812734246254

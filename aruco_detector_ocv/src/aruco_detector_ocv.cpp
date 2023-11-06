@@ -60,8 +60,8 @@ bool set_start = false;
 
 tf2_ros::Buffer tfBuffer;
 
-// #define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
-#define SSTR(x) ((std::ostringstream() << std::dec << x).str())
+#define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
+// #define SSTR(x) ((std::ostringstream() << std::dec << x).str())
 #define ROUND2(x) std::round(x * 100) / 100
 #define ROUND3(x) std::round(x * 1000) / 1000
 

@@ -21,7 +21,7 @@
         <include>
             <uri>model://aruco_visual_marker_7</uri>
         </include>
-        <pose frame="">1 2 0.40 0 -1.563161 -1.563161</pose>
+        <pose frame="">1 0 0.20 0 -1.563161 0</pose>
 	</model>
 
         <model name="aws_robomaker_warehouse_ShelfF_01_001">
