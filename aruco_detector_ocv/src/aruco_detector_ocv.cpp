@@ -22,6 +22,7 @@
 #include "std_msgs/Int16.h"
 #include "std_srvs/SetBool.h"
 #include "geometry_msgs/Pose.h"
+#include "geometry_msgs/PoseStamped.h"
 
 // ROS image geometry
 #include <image_geometry/pinhole_camera_model.h>
@@ -53,7 +54,7 @@ using namespace cv;
 
 // Publisher
 image_transport::Publisher result_img_pub_;
-ros::Publisher tf_list_pub_;
+ros::Publisher tf_list_pub_, raw_marker_pub_;
 ros::Publisher aruco_info_pub_;
 
 bool set_start = false;
@@ -257,6 +258,10 @@ if(ids.size()>0)
 
     // Create and publish tf message for each marker
     tf2_msgs::TFMessage tf_msg_list;
+    geometry_msgs::PoseStamped marker_pose_raw;
+    tf2::Quaternion q_original, q_rotated, q_roll, q_yaw;
+    q_roll.setRPY(-M_PI_2, 0, 0);
+    q_yaw.setRPY(0,0,M_PI_2);
     if(set_start){
         for (auto i = 0; i < rotation_vectors.size(); ++i)
         {
@@ -285,19 +290,26 @@ if(ids.size()>0)
                 marker_pose.orientation.w = transform.getRotation().getW();
                 poseTransform = tfBuffer.lookupTransform("odom", "camera_rgb_optical_frame", ros::Time(0), ros::Duration(1.0));
                 tf2::doTransform(marker_pose, marker_pose, poseTransform);
+                tf2::convert(marker_pose.orientation, q_original);
+
+                q_rotated = q_yaw * q_roll * q_original;
+                q_rotated.normalize();
+                geometry_msgs::Quaternion rotated_orientation;
+                tf2::convert(q_rotated, rotated_orientation);
                 tf_msg.transform.translation.x = marker_pose.position.x ;
                 tf_msg.transform.translation.y = marker_pose.position.y;
                 tf_msg.transform.translation.z = marker_pose.position.z;
-                tf_msg.transform.rotation.x = marker_pose.orientation.x;
-                tf_msg.transform.rotation.y = marker_pose.orientation.y;
-                tf_msg.transform.rotation.z = marker_pose.orientation.z;
-                tf_msg.transform.rotation.w = marker_pose.orientation.w;
+                tf_msg.transform.rotation = rotated_orientation;
                 tf_msg_list.transforms.push_back(tf_msg);
+                marker_pose_raw.header.stamp = stamp;
+                marker_pose_raw.header.frame_id = "odom";
+                marker_pose_raw.pose = marker_pose;
+                marker_pose_raw.pose.orientation = rotated_orientation;
                 
-                // br.sendTransform(tf_msg);
             }
         }
         tf_list_pub_.publish(tf_msg_list);
+        raw_marker_pub_.publish(marker_pose_raw);
     }
 }
 
@@ -445,12 +457,13 @@ int main(int argc, char **argv) {
     ros::Subscriber rgb_sub = _nh.subscribe(rgb_topic.c_str(), queue_size, callback);
     ros::Subscriber rgb_info_sub = _nh.subscribe(rgb_info_topic.c_str(), queue_size, callback_camera_info);
     ros::Subscriber parameter_sub = _nh.subscribe("update_params", queue_size, update_params_cb);
-    ros::ServiceServer start_ser = _nh.advertiseService("set_docking", startCB);
+    ros::ServiceServer start_ser = _nh.advertiseService("set_marker_detect", startCB);
 
     // Publisher:
   image_transport::ImageTransport it(nh);
   result_img_pub_ = it.advertise("result_img", 1);
   tf_list_pub_    = _nh.advertise<tf2_msgs::TFMessage>("tf_list", 10);
+  raw_marker_pub_ = _nh.advertise<geometry_msgs::PoseStamped>("aruco_marker/detection_raw",1);
 
   aruco_info_pub_ = _nh.advertise<alfons_msgs::ArucoInfo>("aruco_list", 10);
 
