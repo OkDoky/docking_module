@@ -292,7 +292,7 @@ if(ids.size()>0)
                 tf2::doTransform(marker_pose, marker_pose, poseTransform);
                 tf2::convert(marker_pose.orientation, q_original);
 
-                q_rotated = q_yaw * q_roll * q_original;
+                q_rotated = q_original * q_roll * q_yaw;
                 q_rotated.normalize();
                 geometry_msgs::Quaternion rotated_orientation;
                 tf2::convert(q_rotated, rotated_orientation);
