@@ -411,9 +411,11 @@ namespace mpc_ros{
         int last_index = _l_path.poses.size() - 1;
         double _dx = _l_path.poses[last_index].pose.position.x - _rx;
         double _dy = _l_path.poses[last_index].pose.position.y - _ry;
+        double _goalyaw = tf::getYaw(_l_path.poses[last_index].pose.orientation);
+        double _etheta = _goalyaw - _rtheta;
         double _pdist = hypot(_dx, _dy);
+        double _line_direction_angle = 90.0 + (_goalyaw * 180.0 / M_PI);
         double _ldist = distanceToLine(_rx, _ry, _l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y, _line_direction_angle, _line_offset_distance);
-        double _etheta = tf::getYaw(_l_path.poses[last_index].pose.orientation) - _rtheta;
         double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
 
         switch(reached_state){
@@ -442,11 +444,11 @@ namespace mpc_ros{
                     reached_state = ONLY_POSITION_ARRIVED;
                     ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 }
-                // else if (_ldist < 0.02) {
-                //     reached_state = NOT_WORKING;
-                //     ROS_WARN("[ROSNMPC] state Transition TRACKING -> NOT_WORKING");
-                //     ROS_ERROR("[ROSNMPC] robot cross the errorline without reaching the goal");
-                // }
+                else if (_ldist < 0.05) {
+                    reached_state = NOT_WORKING;
+                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    ROS_ERROR("[ROSNMPC] robot cross the errorline without reaching the goal");
+                }
                 // deceleration
                 if (_pdist < (_max_linear_speed + _safety_speed)*1/_max_throttle){
                     _max_linear_speed = _max_throttle * _pdist + _safety_speed;
