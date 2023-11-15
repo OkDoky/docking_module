@@ -35,13 +35,13 @@ namespace mpc_ros{
         g_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
         l_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
         cmd_vel_pub_ = _nh.advertise<geometry_msgs::Twist>("cmd_vel", 1);
-        mpc_state_pub_ = _nh.advertise<std_msgs::String>("mpc_state", 1);
+        mpc_state_pub_ = _nh.advertise<std_msgs::String>("docking/status", 1);
         cte_pub_ = _nh.advertise<std_msgs::Float64>("mpc_cte", 1);
+        debug_first_local_plan_point_ = _nh.advertise<geometry_msgs::PoseStamped>("debug_first_local_plan_point", 1);
 
         //Assuming this planner is being run within the navigation stack, we can
         //just do an upward search for the frequency at which its being run. This
         //also allows the frequency to be overwritten locally.
-        ros::NodeHandle nh_;
         std::string controller_frequency_param_name;
         double controller_frequency = 10.0;
         
@@ -52,7 +52,9 @@ namespace mpc_ros{
         _sub_global_plan = _nh.subscribe("/plan", 1, &MPCPlannerROS::pathCB, this);
         _pub_mpctraj   = _nh.advertise<nav_msgs::Path>("mpc_trajectory", 1);// MPC trajectory output
         _pub_downsampled_path  = _nh.advertise<nav_msgs::Path>("mpc_reference", 1); // reference path for MPC ///mpc_reference 
-        _client_set_start = _nh.serviceClient<std_srvs::SetBool>("set_start");
+        _client_set_marker_detect = _nh.serviceClient<std_srvs::SetBool>("set_marker_detect");
+        _server_set_docking = _nh.advertiseService("set_docking", &MPCPlannerROS::dockingCB, this);
+
         // init robot state
         _rx = 0.0;
         _ry = 0.0;
@@ -89,6 +91,7 @@ namespace mpc_ros{
         _default_max_linear_speed = _max_linear_speed;
         _default_max_angular_speed = _max_angvel;
         _safety_speed = 0.02;
+        _requested_cancel = false;
 
         setParam();
 
@@ -100,7 +103,7 @@ namespace mpc_ros{
         str_state_before = "None";
         initialized_ = true;
         ROS_WARN("[ROSMPC] start to initialize timer event.");
-        timer_ = nh_.createTimer(ros::Duration(_dt), &MPCPlannerROS::controlLoopCB, this);
+        timer_ = _nh.createTimer(ros::Duration(_dt), &MPCPlannerROS::controlLoopCB, this);
         ROS_WARN("[ROSMPC] finish initialize timer control loop.");
 
     }
@@ -399,6 +402,12 @@ namespace mpc_ros{
 	mpc_state MPCPlannerROS::getTrackingState(){
         mpc_state reached_state = _arrival_state;
         
+        if (_requested_cancel){
+            reached_state = CANCEL_REQUESTED;
+            _requested_cancel = false;
+            ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+            return reached_state;
+        }
         int last_index = _l_path.poses.size() - 1;
         double _dx = _l_path.poses[last_index].pose.position.x - _rx;
         double _dy = _l_path.poses[last_index].pose.position.y - _ry;
@@ -411,27 +420,27 @@ namespace mpc_ros{
             case GETPLAN:
                 if (abs(_heading_error) > _yaw_tolerance){
                     reached_state = ROTATION;
-                    ROS_WARN("[ROSNMPC] state Transition GETPLAN -> ROTATION");
+                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 }
                 else {
                     reached_state = TRACKING;
-                    ROS_WARN("[ROSNMPC] state Transition GETPLAN -> TRACKING");
+                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 }
                 return reached_state;
             case ROTATION:
                 if (abs(_heading_error) < _yaw_tolerance){
                     reached_state = TRACKING;
-                    ROS_WARN("[ROSNMPC] state Transition ROTATION -> TRACKING");
+                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 }
                 return reached_state;
             case TRACKING:
                 if (_pdist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
                     reached_state = ARRIVED;
-                    ROS_WARN("[ROSNMPC] state Transition TRACKING -> ARRIVED");
+                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 }
                 else if (_pdist < _xy_tolerance){
                     reached_state = ONLY_POSITION_ARRIVED;
-                    ROS_WARN("[ROSNMPC] state Transition TRACKING -> ONLY_POSITION_ARRIVED");
+                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 }
                 // else if (_ldist < 0.02) {
                 //     reached_state = NOT_WORKING;
@@ -450,12 +459,16 @@ namespace mpc_ros{
             case ONLY_POSITION_ARRIVED:
                 if (_pdist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
                     reached_state = ARRIVED;
-                    ROS_WARN("[ROSNMPC] state Transition ONLY_POSITION_ARRIVED -> ARRIVED");
+                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 }
                 return reached_state;
             case ARRIVED:
                 reached_state = NOT_WORKING;
-                ROS_WARN("[ROSNMPC] state Transition ARRIVED -> NOT_WORKING");
+                ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                return reached_state;
+            case CANCEL_REQUESTED:
+                reached_state = NOT_WORKING;
+                ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
                 return reached_state;
         }
     }
@@ -513,14 +526,34 @@ namespace mpc_ros{
         double _dy = _g_path.poses[last_index].pose.position.y - _ry;
         double _dist = hypot(_dx, _dy);
         if (!_g_path.poses.size() < 10 && _dist > 0.05){
-            if (_arrival_state == NOT_WORKING){
+            if (_arrival_state == WAITING_FOR_DETECTION){
                 ROS_WARN("[ROSNMPC] get new plan");
-                ROS_WARN("[ROSNMPC] current path size : %d", _g_path.poses.size());
+                ROS_WARN("[ROSNMPC] current path size : %ld", _g_path.poses.size());
                 _l_path = *pathMsg;
                 _arrival_state = GETPLAN;
-                ROS_WARN("[ROSNMPC] state Transition NOT_WORKING -> GETPLAN");
+                ROS_WARN("[ROSNMPC] state Transition WAITING_FOR_DETECTION -> GETPLAN");
             }
         }
+    }
+
+    bool  MPCPlannerROS::dockingCB(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res){
+        if (req.data){
+            if (_arrival_state == NOT_WORKING){
+                _arrival_state = WAITING_FOR_DETECTION;
+                std_srvs::SetBool _client;
+                _client.request.data = true;
+                _client_set_marker_detect.call(_client);
+            }
+        }else{
+            if (_arrival_state != ARRIVED && _arrival_state != NOT_WORKING){
+                _requested_cancel = true;
+                std_srvs::SetBool _client;
+                _client.request.data = false;
+                _client_set_marker_detect.call(_client);
+            }
+        }
+        res.success = true;
+        return true;
     }
 
     void MPCPlannerROS::getLocalPlan(std::vector<geometry_msgs::PoseStamped>& transformed_plan)
@@ -563,8 +596,7 @@ namespace mpc_ros{
         }    
 
         geometry_msgs::Twist command_vel;
-        if (_arrival_state == NOT_WORKING) {
-            // cmd_vel_pub_.publish(command_vel);
+        if (_arrival_state == NOT_WORKING || _arrival_state == WAITING_FOR_DETECTION) {
             return;
         }
         _arrival_state = getTrackingState();
@@ -573,30 +605,39 @@ namespace mpc_ros{
             case ROTATION:
                 runRotationMotion(command_vel);
                 cmd_vel_pub_.publish(command_vel);
+                debug_first_local_plan_point_.publish(_l_path.poses[0]);
                 break;
             case TRACKING:{
                 bool computeDone = computeVelocityCommands(command_vel);
                 if (computeDone){
                     cmd_vel_pub_.publish(command_vel);
                 }
+                debug_first_local_plan_point_.publish(_l_path.poses[0]);
                 break;
             }
             case ONLY_POSITION_ARRIVED:
                 runRotationMotion(command_vel);
                 cmd_vel_pub_.publish(command_vel);
+                debug_first_local_plan_point_.publish(_l_path.poses[0]);
                 break;
             case ARRIVED:{
                 _max_linear_speed = _default_max_linear_speed;
                 _max_angvel = _default_max_angular_speed;
                 std_srvs::SetBool _client;
                 _client.request.data = false;
-                _client_set_start.call(_client);
+                _client_set_marker_detect.call(_client);
                 cmd_vel_pub_.publish(command_vel);
+                debug_first_local_plan_point_.publish(_l_path.poses[0]);
                 ROS_WARN("[ROSNMPC] in control loop, arrival_state transition to NOT_WORKING from ARRIVED");
                 ROS_WARN("[ROSNMPC] goal x : %.4f, goal y : %.4f, robot x : %.4f, robot y : %.4f", _l_path.poses[_l_path.poses.size()-1].pose.position.x,
                     _l_path.poses[_l_path.poses.size()-1].pose.position.y, _odom.pose.pose.position.x, _odom.pose.pose.position.y);
                 break;
             }
+            case CANCEL_REQUESTED:
+                ROS_WARN("[ROSNMPC] got cancel and publish stop");
+                cmd_vel_pub_.publish(command_vel);
+                break;
+
             default:
                 break;
         }
