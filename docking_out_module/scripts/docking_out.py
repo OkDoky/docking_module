@@ -61,6 +61,9 @@ class DockingOUT:
     
     def run(self, dist):
         self.is_running = True
+        self.is_paused = False
+        self.is_detected = False
+        self.is_canceled = False
         _docking_out = Thread(target=self.execute_callback, args=(dist,))
         _docking_out.daemon = True
         _docking_out.start()
@@ -99,7 +102,7 @@ class DockingOUT:
                 current_p = deepcopy(self.rpose)
                 if self._dist_btw_2_point(start_p, current_p) > dist or self.is_canceled:
                     self.status = D_DONE
-                    rospy.logwarn("[Done] start p : %s, end p : %s, %f"%(start_p, current_p, self._dist_btw_2_point(start_p, current_p)))
+                    rospy.logwarn("[Done] moved %f m"%(self._dist_btw_2_point(start_p, current_p)))
                     cmd.linear.x = 0.0
                     self.pubs['cmd'].publish(cmd)
                     break

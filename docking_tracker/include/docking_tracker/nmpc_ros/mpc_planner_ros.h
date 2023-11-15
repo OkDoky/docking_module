@@ -55,17 +55,21 @@ using namespace std;
 
 enum mpc_state{
     NOT_WORKING,
+    WAITING_FOR_DETECTION,
     GETPLAN,
     ROTATION,
     TRACKING,
     ONLY_POSITION_ARRIVED,
-    ARRIVED 
+    ARRIVED,
+    CANCEL_REQUESTED
 };
 
 std::string enumToString(mpc_state state){
     switch (state){
         case NOT_WORKING:
             return "NOT_WORKING";
+        case WAITING_FOR_DETECTION:
+            return "WAITING_FOR_DETECTION";
         case GETPLAN:
             return "GETPLAN";
         case ROTATION:
@@ -76,6 +80,8 @@ std::string enumToString(mpc_state state){
             return "ONLY_POSITION_ARRIVED";
         case ARRIVED:
             return "ARRIVED";
+        case CANCEL_REQUESTED:
+            return "CANCEL_REQUESTED";
     }
 }
 
@@ -90,6 +96,7 @@ namespace mpc_ros{
             // for visualisation, publishers of global and local plan
             ros::Publisher g_plan_pub_, l_plan_pub_;
             ros::Publisher mpc_state_pub_;
+            ros::Publisher debug_first_local_plan_point_;
 
             // Local planner plugin functions
             void initialize();
@@ -124,7 +131,8 @@ namespace mpc_ros{
             ros::Publisher _pub_downsampled_path, _pub_mpctraj;
             ros::Publisher cmd_vel_pub_;
             ros::Publisher cte_pub_;
-            ros::ServiceClient _client_set_start;
+            ros::ServiceClient _client_set_marker_detect;
+            ros::ServiceServer _server_set_docking;
             tf2_ros::Buffer *tf_;  ///
             
             nav_msgs::Odometry _odom;
@@ -141,6 +149,7 @@ namespace mpc_ros{
             double _safety_speed;
 
             mpc_state _arrival_state;
+            bool _requested_cancel;
             ros::Timer timer_;
 
             MPC _mpc;
@@ -159,6 +168,7 @@ namespace mpc_ros{
 
             void odomCB(const nav_msgs::Odometry::ConstPtr& odomMsg);
             void pathCB(const nav_msgs::Path::ConstPtr& pathMsg);
+            bool dockingCB(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res);
             void controlLoopCB(const ros::TimerEvent&);
     };
 };

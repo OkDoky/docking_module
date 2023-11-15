@@ -62,7 +62,7 @@ bool set_start = false;
 tf2_ros::Buffer tfBuffer;
 
 // #define SSTR(x) static_cast<std::ostringstream&>(std::ostringstream() << std::dec << x).str()
-#define SSTR(x) ((std::ostringstream() << std::dec << x).str())
+#define SSTR(x) std::to_string(x)
 #define ROUND2(x) std::round(x * 100) / 100
 #define ROUND3(x) std::round(x * 1000) / 1000
 
@@ -92,8 +92,11 @@ map<int,  std::vector<int>  > ids_hashmap;   // key: ids, value: number within l
 bool startCB(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res){
     set_start = req.data;
     res.success = true;
-    if(set_start)
+    if(set_start){
+        ros::NodeHandle private_nh("");
+        private_nh.setParam("reset_marker", true);
         res.message = "set_start : true";
+    }
     else
         res.message = "set_start : false";
     return true;
@@ -296,7 +299,7 @@ if(ids.size()>0)
                 q_rotated.normalize();
                 geometry_msgs::Quaternion rotated_orientation;
                 tf2::convert(q_rotated, rotated_orientation);
-                tf_msg.transform.translation.x = marker_pose.position.x ;
+                tf_msg.transform.translation.x = marker_pose.position.x;
                 tf_msg.transform.translation.y = marker_pose.position.y;
                 tf_msg.transform.translation.z = marker_pose.position.z;
                 tf_msg.transform.rotation = rotated_orientation;
