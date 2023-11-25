@@ -108,7 +108,7 @@ namespace mpc_ros{
                                     const std::vector<geometry_msgs::PoseStamped> transformed_plan);
             void runRotationMotion(geometry_msgs::Twist& cmd_vel);
             double distanceToLine(double posX, double posY, double lineStartX, double lineStartY, double lineDirectionAngle, double offsetDistance);
-            mpc_state getTrackingState();
+            void getTrackingState();
             void setParam(); 
             void getLocalPlan(std::vector<geometry_msgs::PoseStamped>& transformed_plan);
 
@@ -117,6 +117,8 @@ namespace mpc_ros{
             geometry_msgs::Twist _cmd_vel;
             // Flags
             bool initialized_;
+            mpc_state getState();
+            void setState(const mpc_state& next_state);
 
         private:
         
