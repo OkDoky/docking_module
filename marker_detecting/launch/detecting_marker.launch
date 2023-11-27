@@ -27,5 +27,10 @@
         <param name="min_prec_value" type="double" value="$(arg min_prec_value)"/>
         <param name="marker_id" type="int" value="$(arg marker_id)"/>
     </node>
-    <node name="detecting_marker" pkg="marker_detecting" type="detecting_marker.py" output="screen"/>
+    <!-- <node name="detecting_marker" pkg="marker_detecting" type="detecting_marker.py" output="screen"/> -->
+    
+    <node name="marker_kalmanfilter" pkg="marker_detecting" type="marker_kf.py" output="screen">
+        <param name="/marker_id"     value="$(arg marker_id)"/>
+        <param name="num_train_sample" value="$(arg num_train_sample)"/>
+    </node>
 </launch>
