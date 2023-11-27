@@ -63,6 +63,8 @@ namespace mpc_ros{
         _fvy = 0.0;
         _fvw = 0.0;
 
+        _crossproduct_prev = 0.0;
+
         // init mpc params
         ROS_WARN("[ROSMPC] start to initialize params.");
         private_nh.param<double>("control_frequency", _control_frequency, 10.0);
@@ -85,8 +87,7 @@ namespace mpc_ros{
         private_nh.param<double>("min_linear_speed", _min_linear_speed, -0.3);
         private_nh.param<double>("xy_tolerance", _xy_tolerance, 0.05);
         private_nh.param<double>("yaw_tolerance", _yaw_tolerance, 0.05);
-        private_nh.param<double>("line_direction_angle", _line_direction_angle, 90);
-        private_nh.param<double>("line_offset_distance", _line_offset_distance, 0.03);
+
         _dt = double(1.0/_control_frequency);
         _default_max_linear_speed = _max_linear_speed;
         _default_max_angular_speed = _max_angvel;
@@ -387,21 +388,27 @@ namespace mpc_ros{
         cmd_vel.angular.z = _etheta + _yaw_tolerance*_etheta/abs(_etheta);
     }
 
-    double MPCPlannerROS::distanceToLine(double posX, double posY, double lineStartX, double lineStartY, double lineDirectionAngle, double offsetDistance) {
-        double perpendicularDirection = lineDirectionAngle + 90.0;
-        double perpendicularDirectionRadian = perpendicularDirection * M_PI / 180.0;
-        double offsetX = offsetDistance * std::cos(perpendicularDirectionRadian);
-        double offsetY = offsetDistance * std::sin(perpendicularDirectionRadian);
-        double goalX = lineStartX + offsetX;
-        double goalY = lineStartY + offsetY;
-        double lineDirectionRadian = lineDirectionAngle * M_PI / 180.0;
-        double dx = posX - goalX;
-        double dy = posY - goalY;
-        double dotProduct = dx * std::cos(lineDirectionRadian) + dy * std::sin(lineDirectionRadian);
-        double closestPointX = lineStartX + dotProduct * std::cos(lineDirectionRadian);
-        double closestPointY = lineStartY + dotProduct * std::sin(lineDirectionRadian);
-        return std::sqrt((posX - closestPointX) * (posX - closestPointX) +
-                         (posY - closestPointY) * (posY - closestPointY));
+    double MPCPlannerROS::crossProductOnTheLine(const std::vector<int>& point, const std::vector<int>& lineStart, double lineDirectionRadian){
+        double lineDirectionX = cos(lineDirectionRadian);
+        double lineDirectionY = sin(lineDirectionRadian);
+
+        std::vector<int> pointVector = {point[0] - lineStart[0], point[1] - lineStart[1]};
+
+        double crossProduct = lineDirectionX * pointVector[1] - lineDirectionY * pointVector[0];
+
+        return crossProduct;
+    }
+
+    bool MPCPlannerROS::determinCrossTheLine(double crossproduct_prev, double crossproduct){
+        bool result;
+        
+        if(crossproduct_prev == 0.0){
+            result = false;
+        }
+        else{
+            result = (crossproduct_prev * crossproduct < 0);
+        }
+        return result;
     }
 
 	void MPCPlannerROS::getTrackingState(){
@@ -417,11 +424,15 @@ namespace mpc_ros{
         double _dx = _l_path.poses[last_index].pose.position.x - _rx;
         double _dy = _l_path.poses[last_index].pose.position.y - _ry;
         double _goalyaw = tf::getYaw(_l_path.poses[last_index].pose.orientation);
-        double _etheta = _goalyaw - _rtheta;
         double _pdist = hypot(_dx, _dy);
-        double _line_direction_angle = 90.0 + (_goalyaw * 180.0 / M_PI);
-        double _ldist = distanceToLine(_rx, _ry, _l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y, _line_direction_angle, _line_offset_distance);
+        double _etheta = _goalyaw - _rtheta;
         double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
+        std::vector<int> _rpos = {_rx, _ry};
+        std::vector<int> _goalpos = {_l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y};
+        double _crossproduct = crossProductOnTheLine(_rpos, _goalpos, _goalyaw + M_PI/2.0);
+        bool _crossFlag = determinCrossTheLine(_crossproduct_prev, _crossproduct);
+        _crossproduct_prev = _crossproduct;
+        
 
         switch(reached_state){
             case GETPLAN:
@@ -449,9 +460,10 @@ namespace mpc_ros{
                     reached_state = ONLY_POSITION_ARRIVED;
                     setState(reached_state);
                 }
-                else if (_ldist < 0.05) {
+                else if (_crossFlag) {
                     reached_state = NOT_WORKING;
                     setState(reached_state);
+                    _crossproduct_prev = 0.0;
                     ROS_ERROR("[ROSNMPC] robot cross the errorline without reaching the goal");
                 }
                 // deceleration

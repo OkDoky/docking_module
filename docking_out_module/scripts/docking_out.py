@@ -107,7 +107,7 @@ class DockingOUT:
                     self.pubs['cmd'].publish(cmd)
                     break
                 scan = self.scan
-                self.is_detected = self._scan_in_polygon(scan)
+                # self.is_detected = self._scan_in_polygon(scan)
                 if self.is_detected:
                     self.status = D_STOPPED
                     cmd.linear.x = 0.0
