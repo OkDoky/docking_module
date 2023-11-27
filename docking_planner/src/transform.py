@@ -173,7 +173,6 @@ def cal_plan(displacement, marker_displacement):
         tf_angle = tf.transformations.euler_from_quaternion(q_tf)
         debug_point.point = point_new
         debug_pub.publish(debug_point)
-        rospy.logwarn("[TransformPlan] point_new : %s,\n ")
         return compute_plan(start_point, np.rad2deg(robot_angle[2]), point_new, np.rad2deg(tf_angle[2]), origin_pos, q), isChange # get_rotation_angle(v_new,origin_new)
     else: return Path(), isChange
 
