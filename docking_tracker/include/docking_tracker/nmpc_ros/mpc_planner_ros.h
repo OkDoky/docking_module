@@ -150,6 +150,8 @@ namespace mpc_ros{
             double _default_max_linear_speed, _default_max_angular_speed;
             double _safety_speed;
 
+            double _path_displacement;
+
             mpc_state _arrival_state;
             bool _requested_cancel;
             ros::Timer timer_;

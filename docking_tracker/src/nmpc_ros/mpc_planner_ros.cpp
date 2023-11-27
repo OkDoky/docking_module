@@ -102,6 +102,11 @@ namespace mpc_ros{
         _arrival_state = NOT_WORKING;
         str_state_before = "None";
         initialized_ = true;
+        double marker_displacement, path_displacement;
+        _path_displacement = 0.1;
+        _nh.param<double>("path_generate/marker_displacement", marker_displacement, 0.05);
+        _nh.param<double>("path_generate/path_displacement", path_displacement, 0.5);
+        _path_displacement = _path_displacement + path_displacement + marker_displacement;
         ROS_WARN("[ROSMPC] start to initialize timer event.");
         timer_ = _nh.createTimer(ros::Duration(_dt), &MPCPlannerROS::controlLoopCB, this);
         ROS_WARN("[ROSMPC] finish initialize timer control loop.");
@@ -534,12 +539,15 @@ namespace mpc_ros{
         double _dx = _g_path.poses[last_index].pose.position.x - _rx;
         double _dy = _g_path.poses[last_index].pose.position.y - _ry;
         double _dist = hypot(_dx, _dy);
-        if (!_g_path.poses.size() < 10 && _dist > 0.05){
+        if (_dist > _path_displacement){
             if (_arrival_state == WAITING_FOR_DETECTION){
                 ROS_WARN("[ROSNMPC] get new plan");
                 _l_path = *pathMsg;
                 _arrival_state = GETPLAN;
                 ROS_WARN("[ROSNMPC] state Transition WAITING_FOR_DETECTION -> GETPLAN");
+            } else if (_arrival_state == TRACKING){
+                ROS_WARN("[ROSNMPC] update global plan");
+                _l_path = *pathMsg;
             }
         }
     }
