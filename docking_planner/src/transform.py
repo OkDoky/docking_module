@@ -156,9 +156,9 @@ def cal_plan(displacement, marker_displacement):
         v_new = np.dot(origin_matrix,v) # offset point
         point_new = Point(x=v_new[0], y=v_new[1], z=v_new[2]) # offset point
         
-        if (getEuclidianDistance(point_new, backup_pose) < 0.02):
-            isChange = False
-            return Path(), isChange
+        # if (getEuclidianDistance(point_new, backup_pose) < 0.02):
+        #     isChange = False
+        #     return Path(), isChange
         backup_pose = point_new
 
         start_point = Point(x=robot_odom.pose.pose.position.x, y=robot_odom.pose.pose.position.y, z=0.) # now robot odom position
