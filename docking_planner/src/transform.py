@@ -22,14 +22,21 @@ Aruco_tf = TransformStamped()
 Aruco_pose = Quaternion()
 Odom_pose = Quaternion()
 robot_odom = Odometry()
-def compute_plan(start_point, start_yaw, end_point, end_yaw, straight_end, frame, dt=0.1):
+def compute_plan(start_point, start_yaw, end_point, end_yaw, 
+                 straight_end, frame, sv, ev, dt=0.1):
     global last_plan_info
     
     start_ang = np.deg2rad(start_yaw)
     end_ang = np.deg2rad(end_yaw)
+    if abs(sv) < 0.01:
+        sv = 0.01
     time, x, y, yaw, v, a, j = quintic_polynomials_planner(\
-        start_point.x, start_point.y, start_ang, end_point.x, end_point.y, end_ang, dt, sv=0.01)
+        start_point.x, start_point.y, start_ang, 
+        end_point.x, end_point.y, end_ang, dt, 
+        sv=sv, max_accel=0.2)
     path = Path()
+    if len(time) == 0:
+        return path
     path.header.stamp = rospy.Time.now()
     path.header.frame_id = "odom"
     for i, t in enumerate(time):
@@ -173,7 +180,11 @@ def cal_plan(displacement, marker_displacement):
         tf_angle = tf.transformations.euler_from_quaternion(q_tf)
         debug_point.point = point_new
         debug_pub.publish(debug_point)
-        return compute_plan(start_point, np.rad2deg(robot_angle[2]), point_new, np.rad2deg(tf_angle[2]), origin_pos, q), isChange # get_rotation_angle(v_new,origin_new)
+        sv = math.hypot(robot_odom.twist.twist.linear.x, robot_odom.twist.twist.linear.y)
+        return compute_plan(start_point, np.rad2deg(robot_angle[2]), 
+                            point_new, np.rad2deg(tf_angle[2]), 
+                            origin_pos, q,
+                            sv, 0.2), isChange # get_rotation_angle(v_new,origin_new)
     else: return Path(), isChange
 
 def sub_TF():
@@ -209,7 +220,7 @@ def sub_TF():
         if len(plan.poses) != 0:
             if isChange:
                 pub.publish(plan)
-            callback_trigger = False
+        callback_trigger = False
         rospy.sleep(0.1)
     
 
