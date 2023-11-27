@@ -24,10 +24,8 @@
         <param name="path_length"               value="1.0"/>
         <param name="max_linear_speed"          value="0.2"/>
         <param name="min_linear_speed"          value="0.08"/>
-        <param name="xy_tolerance"              value="0.03"/>
-        <param name="yaw_tolerance"             value="0.01"/>
-        <param name="line_direction_angle"      value="90"/>
-        <param name="line_offset_distance"      value="0.0"/>
+        <param name="xy_tolerance"              value="0.02"/>
+        <param name="yaw_tolerance"             value="0.005"/>
         
         <remap from="/plan"                     to="compute_Path"/>
     </node>
