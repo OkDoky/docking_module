@@ -63,6 +63,8 @@ namespace mpc_ros{
         _fvy = 0.0;
         _fvw = 0.0;
 
+        _crossproduct_prev = 0.0;
+
         // init mpc params
         ROS_WARN("[ROSMPC] start to initialize params.");
         private_nh.param<double>("control_frequency", _control_frequency, 10.0);
@@ -85,8 +87,7 @@ namespace mpc_ros{
         private_nh.param<double>("min_linear_speed", _min_linear_speed, -0.3);
         private_nh.param<double>("xy_tolerance", _xy_tolerance, 0.05);
         private_nh.param<double>("yaw_tolerance", _yaw_tolerance, 0.05);
-        private_nh.param<double>("line_direction_angle", _line_direction_angle, 90);
-        private_nh.param<double>("line_offset_distance", _line_offset_distance, 0.03);
+
         _dt = double(1.0/_control_frequency);
         _default_max_linear_speed = _max_linear_speed;
         _default_max_angular_speed = _max_angvel;
@@ -102,6 +103,11 @@ namespace mpc_ros{
         _arrival_state = NOT_WORKING;
         str_state_before = "None";
         initialized_ = true;
+        double marker_displacement, path_displacement;
+        _path_displacement = 0.1;
+        _nh.param<double>("path_generate/marker_displacement", marker_displacement, 0.05);
+        _nh.param<double>("path_generate/path_displacement", path_displacement, 0.5);
+        _path_displacement = _path_displacement + path_displacement + marker_displacement;
         ROS_WARN("[ROSMPC] start to initialize timer event.");
         timer_ = _nh.createTimer(ros::Duration(_dt), &MPCPlannerROS::controlLoopCB, this);
         ROS_WARN("[ROSMPC] finish initialize timer control loop.");
@@ -382,97 +388,114 @@ namespace mpc_ros{
         cmd_vel.angular.z = _etheta + _yaw_tolerance*_etheta/abs(_etheta);
     }
 
-    double MPCPlannerROS::distanceToLine(double posX, double posY, double lineStartX, double lineStartY, double lineDirectionAngle, double offsetDistance) {
-        double perpendicularDirection = lineDirectionAngle + 90.0;
-        double perpendicularDirectionRadian = perpendicularDirection * M_PI / 180.0;
-        double offsetX = offsetDistance * std::cos(perpendicularDirectionRadian);
-        double offsetY = offsetDistance * std::sin(perpendicularDirectionRadian);
-        double goalX = lineStartX + offsetX;
-        double goalY = lineStartY + offsetY;
-        double lineDirectionRadian = lineDirectionAngle * M_PI / 180.0;
-        double dx = posX - goalX;
-        double dy = posY - goalY;
-        double dotProduct = dx * std::cos(lineDirectionRadian) + dy * std::sin(lineDirectionRadian);
-        double closestPointX = lineStartX + dotProduct * std::cos(lineDirectionRadian);
-        double closestPointY = lineStartY + dotProduct * std::sin(lineDirectionRadian);
-        return std::sqrt((posX - closestPointX) * (posX - closestPointX) +
-                         (posY - closestPointY) * (posY - closestPointY));
+    double MPCPlannerROS::crossProductOnTheLine(const std::vector<double>& point, const std::vector<double>& lineStart, double lineDirectionRadian){
+        double lineDirectionX = cos(lineDirectionRadian);
+        double lineDirectionY = sin(lineDirectionRadian);
+
+        std::vector<double> pointVector = {point[0] - lineStart[0], point[1] - lineStart[1]};
+
+        double crossProduct = lineDirectionX * pointVector[1] - lineDirectionY * pointVector[0];\
+        return crossProduct;
     }
 
-	mpc_state MPCPlannerROS::getTrackingState(){
+    bool MPCPlannerROS::determinCrossTheLine(double crossproduct_prev, double crossproduct){
+        bool result;
+        if(crossproduct_prev == 0.0){
+            result = false;
+        }
+        else{
+            result = (crossproduct_prev * crossproduct < 0);
+        }
+        // ROS_WARN("[ROSNMPC] crossproduct_prev : %f, crossproduct_curr : %f || result : %f", crossproduct_prev, crossproduct, crossproduct_prev*crossproduct);
+        return result;
+    }
+
+	void MPCPlannerROS::getTrackingState(){
         mpc_state reached_state = _arrival_state;
         
         if (_requested_cancel){
             reached_state = CANCEL_REQUESTED;
             _requested_cancel = false;
-            ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
-            return reached_state;
+            setState(reached_state);
+            return;
         }
         int last_index = _l_path.poses.size() - 1;
         double _dx = _l_path.poses[last_index].pose.position.x - _rx;
         double _dy = _l_path.poses[last_index].pose.position.y - _ry;
         double _goalyaw = tf::getYaw(_l_path.poses[last_index].pose.orientation);
-        double _etheta = _goalyaw - _rtheta;
         double _pdist = hypot(_dx, _dy);
-        double _line_direction_angle = 90.0 + (_goalyaw * 180.0 / M_PI);
-        double _ldist = distanceToLine(_rx, _ry, _l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y, _line_direction_angle, _line_offset_distance);
+        double _etheta = _goalyaw - _rtheta;
         double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
+        std::vector<double> _rpos = {_rx, _ry};
+        std::vector<double> _goalpos = {_l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y};
+        double _crossproduct = crossProductOnTheLine(_rpos, _goalpos, _goalyaw + M_PI/2.0);
+        bool _crossFlag = determinCrossTheLine(_crossproduct_prev, _crossproduct);
+        _crossproduct_prev = _crossproduct;
+        
 
         switch(reached_state){
             case GETPLAN:
                 if (abs(_heading_error) > _yaw_tolerance){
                     reached_state = ROTATION;
-                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    setState(reached_state);
                 }
                 else {
                     reached_state = TRACKING;
-                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    setState(reached_state);
                 }
-                return reached_state;
+                return;
             case ROTATION:
                 if (abs(_heading_error) < _yaw_tolerance){
                     reached_state = TRACKING;
-                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    setState(reached_state);
                 }
-                return reached_state;
+                return;
             case TRACKING:
                 if (_pdist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
                     reached_state = ARRIVED;
-                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    setState(reached_state);
                 }
                 else if (_pdist < _xy_tolerance){
                     reached_state = ONLY_POSITION_ARRIVED;
-                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    setState(reached_state);
                 }
-                else if (_ldist < 0.05) {
+                else if (_crossFlag) {
                     reached_state = NOT_WORKING;
-                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    setState(reached_state);
+                    _crossproduct_prev = 0.0;
                     ROS_ERROR("[ROSNMPC] robot cross the errorline without reaching the goal");
                 }
                 // deceleration
                 if (_pdist < (_max_linear_speed + _safety_speed)*1/_max_throttle){
                     _max_linear_speed = _max_throttle * _pdist + _safety_speed;
-                    // _mpc_params["REF_CTE"]  = _xy_tolerance;
                     _mpc_params["REF_VEL"]  = _max_linear_speed;
                     _mpc.LoadParams(_mpc_params);
-                    // ROS_WARN("[ROSNMPC] deceleration mode, dist : %.4f, linear speed : %.4f", _dist, _max_linear_speed);
                 }
-                return reached_state;
+                return;
             case ONLY_POSITION_ARRIVED:
                 if (_pdist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
                     reached_state = ARRIVED;
-                    ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
+                    setState(reached_state);
                 }
-                return reached_state;
+                return;
             case ARRIVED:
                 reached_state = NOT_WORKING;
-                ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
-                return reached_state;
+                setState(reached_state);
+                return;
             case CANCEL_REQUESTED:
                 reached_state = NOT_WORKING;
-                ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(reached_state).c_str());
-                return reached_state;
+                setState(reached_state);
+                return;
         }
+    }
+
+    void MPCPlannerROS::setState(const mpc_state& next_state){
+        ROS_WARN("[ROSNMPC] state Transition %s -> %s", enumToString(_arrival_state).c_str(), enumToString(next_state).c_str());
+        _arrival_state = next_state;
+    }
+
+    mpc_state MPCPlannerROS::getState(){
+        return _arrival_state;
     }
 
     // Evaluate a polynomial.
@@ -527,13 +550,15 @@ namespace mpc_ros{
         double _dx = _g_path.poses[last_index].pose.position.x - _rx;
         double _dy = _g_path.poses[last_index].pose.position.y - _ry;
         double _dist = hypot(_dx, _dy);
-        if (!_g_path.poses.size() < 10 && _dist > 0.05){
+        if (_dist > _path_displacement){
             if (_arrival_state == WAITING_FOR_DETECTION){
                 ROS_WARN("[ROSNMPC] get new plan");
-                ROS_WARN("[ROSNMPC] current path size : %ld", _g_path.poses.size());
                 _l_path = *pathMsg;
                 _arrival_state = GETPLAN;
                 ROS_WARN("[ROSNMPC] state Transition WAITING_FOR_DETECTION -> GETPLAN");
+            } else if (_arrival_state == TRACKING){
+                ROS_WARN("[ROSNMPC] update global plan");
+                _l_path = *pathMsg;
             }
         }
     }
@@ -601,7 +626,8 @@ namespace mpc_ros{
         if (_arrival_state == NOT_WORKING || _arrival_state == WAITING_FOR_DETECTION) {
             return;
         }
-        _arrival_state = getTrackingState();
+        getTrackingState();
+        _arrival_state = getState();
         
         switch (_arrival_state){
             case ROTATION:
@@ -630,9 +656,6 @@ namespace mpc_ros{
                 _client_set_marker_detect.call(_client);
                 cmd_vel_pub_.publish(command_vel);
                 debug_first_local_plan_point_.publish(_l_path.poses[0]);
-                ROS_WARN("[ROSNMPC] in control loop, arrival_state transition to NOT_WORKING from ARRIVED");
-                ROS_WARN("[ROSNMPC] goal x : %.4f, goal y : %.4f, robot x : %.4f, robot y : %.4f", _l_path.poses[_l_path.poses.size()-1].pose.position.x,
-                    _l_path.poses[_l_path.poses.size()-1].pose.position.y, _odom.pose.pose.position.x, _odom.pose.pose.position.y);
                 break;
             }
             case CANCEL_REQUESTED:

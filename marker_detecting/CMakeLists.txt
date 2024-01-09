@@ -9,7 +9,6 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_msgs
   tf2_ros
   tf
-  gazebo_ros
 )
 
 catkin_package()

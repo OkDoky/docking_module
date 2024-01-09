@@ -7,6 +7,7 @@ from tf2_msgs.msg import TFMessage
 from geometry_msgs.msg import TransformStamped, PoseStamped
 from tf2_ros import TransformBroadcaster
 from tf.transformations import *
+from marker_kf import KalmanTrack
 
 class Filter():
     def __init__(self):
@@ -19,7 +20,7 @@ class Filter():
         self.marker_tf = TransformStamped()
         self.br = TransformBroadcaster()
         self.swich = False
-        self.marker_id = rospy.get_param("/marker_id", 7)
+        self.marker_id = int(rospy.get_param("/marker_id", 7))
         
         self.A = np.array([[1, 0, 0, 0, 0, 0],
                             [0, 1, 0, 0, 0, 0],
@@ -38,6 +39,7 @@ class Filter():
         
         self.x = None
         self.P = 1.0 * np.eye(6)
+        self.kf = KalmanTrack(10)
         
     def cb(self, msg):
         if self.swich:
@@ -58,7 +60,8 @@ class Filter():
                                         euler[0],
                                         euler[1],
                                         euler[2]])
-                        self.kalman_filter(z_meas)
+                        if not self.kalman_filter(z_meas):
+                            return
                         filtered_pose = PoseStamped()
                         filtered_pose.header.stamp = tf.header.stamp
                         filtered_pose.header.frame_id = tf.header.frame_id
@@ -97,21 +100,27 @@ class Filter():
                         self.swich = True
                         
     def kalman_filter(self, z_meas):  
-        if self.x is not None:
-            x_pred = np.dot(self.A, self.x)
-            P_pred = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
+        filtered_z_meas = self.kf.prediction(z_meas)
+        if filtered_z_meas is not None:
+            if self.x is not None:
+                x_pred = np.dot(self.A, self.x)
+                P_pred = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
 
-            K = np.dot(np.dot(P_pred, self.H.T), inv(np.dot(np.dot(self.H, P_pred), self.H.T) + self.R))
+                K = np.dot(np.dot(P_pred, self.H.T), inv(np.dot(np.dot(self.H, P_pred), self.H.T) + self.R))
 
-            self.x = x_pred + np.dot(K, (z_meas - np.dot(self.H, x_pred)))
+                self.x = x_pred + np.dot(K, (filtered_z_meas - np.dot(self.H, x_pred)))
 
-            self.P = P_pred - np.dot(np.dot(K, self.H), P_pred)
+                self.P = P_pred - np.dot(np.dot(K, self.H), P_pred)
+            else:
+                self.x = filtered_z_meas
+            return True
         else:
-            self.x = z_meas
+            return False
     
     def reset_kf(self):
         self.x = None
         self.P = 1.0 * np.eye(6)
+        self.kf.reset()
 
 if __name__ == '__main__':
     filter = Filter()

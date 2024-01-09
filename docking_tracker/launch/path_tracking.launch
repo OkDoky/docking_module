@@ -18,16 +18,14 @@
         <param name="w_accel"                   value="200"/>
         <param name="w_angvel_d"                value="300"/>
         <param name="w_accel_d"                 value="0.1"/>
-        <param name="max_angvel"                value="1.0"/>
+        <param name="max_angvel"                value="0.2"/>
         <param name="max_throttle"              value="0.2"/>
         <param name="bound_value"               value="20.0"/>
-        <param name="path_length"               value="1.0"/>
+        <param name="path_length"               value="0.6"/>
         <param name="max_linear_speed"          value="0.2"/>
         <param name="min_linear_speed"          value="0.08"/>
         <param name="xy_tolerance"              value="0.03"/>
-        <param name="yaw_tolerance"             value="0.01"/>
-        <param name="line_direction_angle"      value="90"/>
-        <param name="line_offset_distance"      value="0.0"/>
+        <param name="yaw_tolerance"             value="0.005"/>
         
         <remap from="/plan"                     to="compute_Path"/>
     </node>

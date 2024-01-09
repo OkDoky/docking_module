@@ -46,8 +46,15 @@ class QuinticPolynomial:
     def calc_third_derivative(self, t):
         return 6 * self.a3 + 24 * self.a4 * t + 60 * self.a5 * t ** 2
 
+def getTime(sx, sy, gx, gy, sv, gv, max_accel):
+    prob_length = math.hypot(sy - gy, sx - gx)
+    try:
+        result_time = (gv - sv)/max_accel + (1/gv)*((prob_length)*1.2 - (gv - sv)*(gv + sv)/(2*max_accel))
+    except ZeroDivisionError:
+        result_time = prob_length * 5
+    return result_time
 
-def quintic_polynomials_planner(sx, sy, syaw, gx, gy, gyaw, dt, sv = 0.0, sa=0.02, gv=0.1, \
+def quintic_polynomials_planner(sx, sy, syaw, gx, gy, gyaw, dt, sv = 0.0, sa=0.02, gv=0.2, \
                                 ga=0.05, max_accel=0.05, max_jerk=0.05):
     """
     quintic polynomial planner
@@ -87,41 +94,43 @@ def quintic_polynomials_planner(sx, sy, syaw, gx, gy, gyaw, dt, sv = 0.0, sa=0.0
 
     time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
 
-    for T in np.arange(MIN_T, MAX_T, MIN_T):
-        xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
-        yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
+    T = getTime(sx, sy, gx, gy, sv, gv, max_accel)
+    print("[Planner] time : %s"%T)
 
-        time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
+    xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
+    yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
 
-        for t in np.arange(0.0, T + dt, dt):
-            time.append(t)
-            rx.append(xqp.calc_point(t))
-            ry.append(yqp.calc_point(t))
+    time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
 
-            vx = xqp.calc_first_derivative(t)
-            vy = yqp.calc_first_derivative(t)
-            v = np.hypot(vx, vy)
-            yaw = math.atan2(vy, vx)
-            rv.append(v)
-            ryaw.append(yaw)
+    for t in np.arange(0.0, T + dt, dt):
+        time.append(t)
+        rx.append(xqp.calc_point(t))
+        ry.append(yqp.calc_point(t))
 
-            ax = xqp.calc_second_derivative(t)
-            ay = yqp.calc_second_derivative(t)
-            a = np.hypot(ax, ay)
-            if len(rv) >= 2 and rv[-1] - rv[-2] < 0.0:
-                a *= -1
-            ra.append(a)
+        vx = xqp.calc_first_derivative(t)
+        vy = yqp.calc_first_derivative(t)
+        v = np.hypot(vx, vy)
+        yaw = math.atan2(vy, vx)
+        rv.append(v)
+        ryaw.append(yaw)
 
-            jx = xqp.calc_third_derivative(t)
-            jy = yqp.calc_third_derivative(t)
-            j = np.hypot(jx, jy)
-            if len(ra) >= 2 and ra[-1] - ra[-2] < 0.0:
-                j *= -1
-            rj.append(j)
+        ax = xqp.calc_second_derivative(t)
+        ay = yqp.calc_second_derivative(t)
+        a = np.hypot(ax, ay)
+        if len(rv) >= 2 and rv[-1] - rv[-2] < 0.0:
+            a *= -1
+        ra.append(a)
 
-        if max([abs(i) for i in ra]) <= max_accel and max([abs(i) for i in rj]) <= max_jerk:
-            print("find path!!")
-            break
+        jx = xqp.calc_third_derivative(t)
+        jy = yqp.calc_third_derivative(t)
+        j = np.hypot(jx, jy)
+        if len(ra) >= 2 and ra[-1] - ra[-2] < 0.0:
+            j *= -1
+        rj.append(j)
+
+    if max([abs(i) for i in ra]) <= max_accel and max([abs(i) for i in rj]) <= max_jerk:
+        print("find path!!")
+        # break
 
     return time, rx, ry, ryaw, rv, ra, rj
 

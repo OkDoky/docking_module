@@ -282,8 +282,8 @@ if(ids.size()>0)
                 tf_msg.header.frame_id = "odom";
                 // tf_msg.header.frame_id = "camera_rgb_optical_frame";
                 stringstream ss;
-                ss << marker_tf_prefix << ids[i];
-                tf_msg.child_frame_id = ss.str();
+                // ss << marker_tf_prefix << ids[i];
+                tf_msg.child_frame_id = std::to_string(ids[i]);
                 marker_pose.position.x = transform.getOrigin().getX();
                 marker_pose.position.y = transform.getOrigin().getY();
                 marker_pose.position.z = transform.getOrigin().getZ();
@@ -291,7 +291,7 @@ if(ids.size()>0)
                 marker_pose.orientation.y = transform.getRotation().getY();
                 marker_pose.orientation.z = transform.getRotation().getZ();
                 marker_pose.orientation.w = transform.getRotation().getW();
-                poseTransform = tfBuffer.lookupTransform("odom", "camera_rgb_optical_frame", ros::Time(0), ros::Duration(1.0));
+                poseTransform = tfBuffer.lookupTransform("odom", "camera_rgb_optical_frame", ros::Time::now(), ros::Duration(1.0));
                 tf2::doTransform(marker_pose, marker_pose, poseTransform);
                 tf2::convert(marker_pose.orientation, q_original);
 
