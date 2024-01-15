@@ -128,7 +128,7 @@ class KalmanTrack():
                         observation_matrices = self.observation_matrix,
                         initial_state_mean = initial_state_mean,
                         initial_state_covariance = initial_state_covariance,
-                        observation_covariance = self.R / 10)
+                        observation_covariance = self.R / 10.)
 
             self.kf1 = self.kf1.em(self.measurements, n_iter=5)
             (filtered_state_means, filtered_state_covariances) = self.kf1.filter(self.measurements)
@@ -140,7 +140,7 @@ class KalmanTrack():
                         observation_matrices = self.observation_matrix,
                         initial_state_mean = initial_state_mean,
                         initial_state_covariance = initial_state_covariance,
-                        observation_covariance = self.R / 20)
+                        observation_covariance = self.R / 20.)
 
             self.kf3 = self.kf3.em(self.measurements, n_iter=5)
             (filtered_state_means, filtered_state_covariances) = self.kf3.filter(self.measurements)
