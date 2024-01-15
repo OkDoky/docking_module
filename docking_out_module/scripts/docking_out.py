@@ -93,7 +93,6 @@ class DockingOUT:
         current_p = deepcopy(self.rpose)
         self.status = D_MOVING
         
-        rospy.logwarn("init thread, start point : %s, end point : %s"%(start_p, current_p))
         cmd = Twist()
         while not rospy.is_shutdown():
             try:
@@ -130,7 +129,10 @@ class DockingOUT:
                                 [r * math.sin(scan.angle_min + i * scan.angle_increment) for i, r in enumerate(scan.ranges)]))
 
         inside_mask = np.array([self.footprint.contains(Point(pt)) for pt in points])
-        distances_inside = distances[inside_mask]
+        try:
+            distances_inside = distances[inside_mask]
+        except IndexError:
+            return False
         if len(distances_inside)>0:
             rospy.logwarn("[DockingOut] %d point is inside footprint"%len(distances_inside))
             return True
