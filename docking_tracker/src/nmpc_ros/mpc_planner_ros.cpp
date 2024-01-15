@@ -388,26 +388,25 @@ namespace mpc_ros{
         cmd_vel.angular.z = _etheta + _yaw_tolerance*_etheta/abs(_etheta);
     }
 
-    double MPCPlannerROS::crossProductOnTheLine(const std::vector<int>& point, const std::vector<int>& lineStart, double lineDirectionRadian){
+    double MPCPlannerROS::crossProductOnTheLine(const std::vector<double>& point, const std::vector<double>& lineStart, double lineDirectionRadian){
         double lineDirectionX = cos(lineDirectionRadian);
         double lineDirectionY = sin(lineDirectionRadian);
 
-        std::vector<int> pointVector = {point[0] - lineStart[0], point[1] - lineStart[1]};
+        std::vector<double> pointVector = {point[0] - lineStart[0], point[1] - lineStart[1]};
 
         double crossProduct = lineDirectionX * pointVector[1] - lineDirectionY * pointVector[0];
-
         return crossProduct;
     }
 
     bool MPCPlannerROS::determinCrossTheLine(double crossproduct_prev, double crossproduct){
         bool result;
-        
         if(crossproduct_prev == 0.0){
             result = false;
         }
         else{
             result = (crossproduct_prev * crossproduct < 0);
         }
+        // ROS_WARN("[ROSNMPC] crossproduct_prev : %f, crossproduct_curr : %f || result : %f", crossproduct_prev, crossproduct, crossproduct_prev*crossproduct);
         return result;
     }
 
@@ -427,8 +426,9 @@ namespace mpc_ros{
         double _pdist = hypot(_dx, _dy);
         double _etheta = _goalyaw - _rtheta;
         double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
-        std::vector<int> _rpos = {_rx, _ry};
-        std::vector<int> _goalpos = {_l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y};
+        std::vector<double> _rpos = {_rx, _ry};
+        std::vector<double> _goalpos = {_l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y};
+
         double _crossproduct = crossProductOnTheLine(_rpos, _goalpos, _goalyaw + M_PI/2.0);
         bool _crossFlag = determinCrossTheLine(_crossproduct_prev, _crossproduct);
         _crossproduct_prev = _crossproduct;

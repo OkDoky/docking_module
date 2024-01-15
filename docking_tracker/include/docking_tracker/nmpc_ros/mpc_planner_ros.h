@@ -107,7 +107,8 @@ namespace mpc_ros{
             Trajectory findBestPath(geometry_msgs::Twist& drive_velocities,
                                     const std::vector<geometry_msgs::PoseStamped> transformed_plan);
             void runRotationMotion(geometry_msgs::Twist& cmd_vel);
-            double crossProductOnTheLine(const std::vector<int>& point, const std::vector<int>& lineStart, double lineDirectionRadian);
+            double crossProductOnTheLine(const std::vector<double>& point, const std::vector<double>& lineStart, double lineDirectionRadian);
+
             bool determinCrossTheLine(double crossproduct_prev, double crossproduct);
             void getTrackingState();
             void setParam(); 
