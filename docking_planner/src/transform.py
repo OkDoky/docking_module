@@ -7,55 +7,139 @@ import sys
 import tf
 import math
 import numpy as np
+from copy import copy
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry, Path
 from std_msgs.msg import String
-from geometry_msgs.msg import PointStamped, QuaternionStamped, Point, Quaternion, PoseStamped, TransformStamped
+from geometry_msgs.msg import PointStamped, QuaternionStamped, Point, Quaternion, PoseStamped, TransformStamped, Pose2D
 from tf.transformations import quaternion_matrix, quaternion_from_matrix
 sys.path.append(os.path.dirname(__file__))
 print(os.path.dirname(__file__))
 
 from planner import quintic_polynomials_planner
 
-# Aurco_tf = TFMessage()
-Aruco_tf = TransformStamped()
-Aruco_pose = Quaternion()
-Odom_pose = Quaternion()
-robot_odom = Odometry()
-def compute_plan(start_point, start_yaw, end_point, end_yaw, 
-                 straight_end, frame, sv, ev, dt=0.1):
-    global last_plan_info
+class CallbackManager:
+    def __init__(self):
+        self.callbacks = {}
     
-    start_ang = np.deg2rad(start_yaw)
-    end_ang = np.deg2rad(end_yaw)
+    def register(self, key, func):
+        if key not in self.callbacks:
+            self.callbacks[key] = []
+        self.callbacks[key].append(func)
+        rospy.loginfo("[CallbackManager] register { key : %s, func : %s}"%(key, str(func)))
+    
+    def trigger(self, key, *args, **kwargs):
+        if key in self.callbacks:
+            for callback in self.callbacks[key]:
+                callback(*args, **kwargs)
+
+robot_odom = Odometry()
+
+def is_near_target_value(target, value, epsilon=1e-9):
+    return abs(target-value) < epsilon
+
+def has_cross_line(a, b, c):
+    """_summary_
+
+    Args:
+        a (Pose2D): current robot pose
+        b (Pose2D): target straight line start pose
+        c (Pose2D): target pose
+
+    Returns:
+        Bool : return True if robot cross the line start with straight
+    """
+    if is_near_target_value(math.pi/2.0, c.theta) or is_near_target_value(-math.pi/2.0, c.theta):
+        # 이 경우, 선은 수평선이므로 A의 x 좌표만 비교하면 됨
+        return a.x > b.x
+    # Calculate the slope of the line perpendicular to the direction at C
+    perpendicular_slope = -1 / math.tan(c.theta)
+
+    # The equation of the line: y = mx + c
+    # We need to find 'c' (y-intercept) for the line
+    line_y_intercept = b.y - perpendicular_slope * b.x
+
+    # Substitute point A into the line equation to determine its position relative to the line
+    side = a.y - (perpendicular_slope * a.x + line_y_intercept)
+
+    return side < 0  # Returns True if A is on one side, False if on the other
+
+def move_pose(target_pose, dist=0.1):
+    dx = math.cos(target_pose.theta) * dist
+    dy = math.sin(target_pose.theta) * dist
+    
+    result_pose = Pose2D()
+    result_pose.x = target_pose.x - dx
+    result_pose.y = target_pose.y - dy
+    result_pose.theta = target_pose.theta
+    return result_pose
+
+def find_nearest_point_on_line(line_start, line_end, pos):
+    ls = np.array([line_start.x, line_start.y, line_start.theta])
+    le = np.array([line_end.x, line_end.y, line_end.theta])
+    p = np.array([pos.x, pos.y, pos.theta])
+    line_vec = le - ls
+    point_vec = p - ls
+    line_len = np.linalg.norm(line_vec)
+    line_unitvec = line_vec / line_len
+    point_proj = np.dot(point_vec, line_unitvec)
+    point_proj = np.clip(point_proj, 0, line_len)
+    nrp = ls + line_unitvec * point_proj
+    nearest_point = Pose2D(x=nrp[0], y=nrp[1], theta=nrp[2])
+    return nearest_point
+
+def compute_plan(start_pose,  end_pose, 
+                 straight_end, frame, sv, ev, dt=0.1):
+    """_summary_
+
+    Args:
+        start_point (Point): current pose of robot - odom frame
+        end_point (Point): pose of end of polynomial plan - odom frame
+        straight_end (Point): target pose(end of last path) - odom frame
+        frame (string): 
+        sv (float): starting velocity(current velocity)
+        ev (float): velocity with tracking linear path
+        dt (float, optional): time difference. Defaults to 0.1.
+
+    Returns:
+        Path: calculated path
+    """
+    
     if abs(sv) < 0.01:
         sv = 0.01
-    time, x, y, yaw, v, a, j = quintic_polynomials_planner(\
-        start_point.x, start_point.y, start_ang, 
-        end_point.x, end_point.y, end_ang, dt, 
-        sv=sv, max_accel=0.2)
+    moved_end_pose = move_pose(end_pose, dist=0.05)
+    _has_cross_line = has_cross_line(start_pose, moved_end_pose, end_pose)
     path = Path()
-    if len(time) == 0:
-        return path
     path.header.stamp = rospy.Time.now()
-    path.header.frame_id = "odom"
-    for i, t in enumerate(time):
-        pose_stamped = PoseStamped()
-        pose_stamped.header.stamp = path.header.stamp + rospy.Duration.from_sec(t)
-        pose_stamped.header.frame_id = "odom"
-        pose_stamped.pose.position.x = x[i]
-        pose_stamped.pose.position.y = y[i]
-        pose_stamped.pose.position.z = 0
-        rotation_matrix = tf.transformations.rotation_matrix((yaw[i]), (0, 0, 1))
-        result_q = tf.transformations.quaternion_from_matrix(rotation_matrix)
-        quaternion = Quaternion()
-        quaternion.x = result_q[0]
-        quaternion.y = result_q[1]
-        quaternion.z = result_q[2]
-        quaternion.w = result_q[3]
-        pose_stamped.pose.orientation = quaternion
-        path.poses.append(pose_stamped)   
-    line_start = np.array([end_point.x, end_point.y, 0])
+    path.header.frame_id = frame
+    result_q = np.zeros(4)
+    if not _has_cross_line:
+        rospy.logdebug("[Transform] Didn't Cross the Line")
+        time, x, y, yaw, v, a, j = quintic_polynomials_planner(\
+            start_pose.x, start_pose.y, start_pose.theta, 
+            end_pose.x, end_pose.y, end_pose.theta, dt, 
+            sv=sv, gv=ev, max_accel=0.2)
+        for i, t in enumerate(time):
+            pose_stamped = PoseStamped()
+            pose_stamped.header.stamp = path.header.stamp + rospy.Duration.from_sec(t)
+            pose_stamped.header.frame_id = frame
+            pose_stamped.pose.position.x = x[i]
+            pose_stamped.pose.position.y = y[i]
+            pose_stamped.pose.position.z = 0
+            rotation_matrix = tf.transformations.rotation_matrix((yaw[i]), (0, 0, 1))
+            result_q = tf.transformations.quaternion_from_matrix(rotation_matrix)
+            quaternion = Quaternion()
+            quaternion.x = result_q[0]
+            quaternion.y = result_q[1]
+            quaternion.z = result_q[2]
+            quaternion.w = result_q[3]
+            pose_stamped.pose.orientation = quaternion
+            path.poses.append(pose_stamped)
+        new_end_point = copy(end_pose)
+    else: # already cross the line..
+        rospy.logdebug("[Transform] Cross the Line")
+        new_end_point = find_nearest_point_on_line(end_pose, straight_end, start_pose)
+    line_start = np.array([new_end_point.x, new_end_point.y, 0])
     line_end = np.array([straight_end.x, straight_end.y, 0])
     dist = int(np.linalg.norm(line_end - line_start)*20 + 1)
     x_points = np.linspace(line_start[0], line_end[0], dist)
@@ -63,52 +147,42 @@ def compute_plan(start_point, start_yaw, end_point, end_yaw,
     z_points = np.linspace(line_start[2], line_end[2], dist)
     # points = np.linspace(line_start, line_end, dist)
     points = np.vstack((x_points, y_points, z_points)).T
-
+    rot = tf.transformations.rotation_matrix((end_pose.theta), (0, 0, 1))
+    linear_q = tf.transformations.quaternion_from_matrix(rot)
     for point in points:
         pose_stamped = PoseStamped()
-        pose_stamped.header.frame_id = "odom"
+        pose_stamped.header.frame_id = frame
         pose_stamped.pose.position.x = point[0]
         pose_stamped.pose.position.y = point[1]
         pose_stamped.pose.position.z = 0
         quaternion = Quaternion()
-        quaternion.x = result_q[0]
-        quaternion.y = result_q[1]
-        quaternion.z = result_q[2]
-        quaternion.w = result_q[3]
+        quaternion.x = linear_q[0]
+        quaternion.y = linear_q[1]
+        quaternion.z = linear_q[2]
+        quaternion.w = linear_q[3]
         pose_stamped.pose.orientation = quaternion
         path.poses.append(pose_stamped)
     return path
 
 def callback_arucoTF(tf_data):
-    global Aurco_tf, callback_trigger
+    global callback_trigger, cm
+    global path_displacement, robot_size, marker_displacement
     callback_trigger = True
-    # Aurco_tf[0] = tf_data
-    Aurco_tf = tf_data
-
-
+    ar_tf = tf_data
+    cm.trigger("planning", 
+               path_displacement, robot_size + marker_displacement,
+               ar_tf)
 
 def callback_odomTF(sub_odom):
     global robot_odom
     robot_odom = sub_odom
     
 def callback_tracking_state(msg):
-    global backup_pose, tracking_state, last_plan_info
+    global backup_pose, tracking_state
     if not msg.data == tracking_state:
         tracking_state = msg.data
-        if tracking_state == "NOT_WORKING":
+        if tracking_state in ["NOT_WORKING", "ARRIVED"]:
             backup_pose = Point()
-        elif tracking_state == "ARRIVED":
-            del last_plan_info["last_plan"].poses[:]
-            last_plan_info['across_displacement'] = False
-            last_plan_info['displacement_index'] = 0
-            rospy.logwarn("reset plan info")
-            
-def callback_localplan(msg):
-    global last_plan_info
-    last_plan_info['last_plan'] = msg
-    if last_plan_info['displacement_index'] >= len(msg.poses):
-        last_plan_info['across_displacement'] = True
-        rospy.logwarn("cross the line")
 
 def get_rotation_angle(p1, p2):
     v = (p2[0]-p1[0], p2[1]-p1[1])
@@ -131,97 +205,76 @@ def get_rotation_angle(p1, p2):
 
     return angle
 
-def cal_plan(displacement, marker_displacement):
+def cal_plan(displacement, marker_displacement, aruco_tf):
     def getEuclidianDistance(new_point, backup_point):
-        dx = new_point.x - backup_point.x
-        dy = new_point.y - backup_point.y
-        dist = math.hypot(dy, dx)
-        return dist
+        return math.hypot(new_point.y - backup_point.y, new_point.x - backup_point.x)
     
-    global Aurco_tf, robot_odom, backup_pose
-    global debug_pub
-    isChange = True
-    debug_point = PointStamped()
-    debug_point.header.stamp = robot_odom.header.stamp
-    debug_point.header.frame_id = robot_odom.header.frame_id
-    # if len(Aurco_tf.transforms) != 0 and robot_odom.header.frame_id != "":
-    if (Aurco_tf) != None and robot_odom.header.frame_id != "":
-        tf_trans = Aurco_tf.transform.translation
+    global robot_odom, backup_pose
+    global pub
+    if (aruco_tf) != None and robot_odom.header.frame_id != "":
+        ## for calculate offset end point from marker pose
+        tf_trans = aruco_tf.transform.translation
         point_origin = Point(x=-marker_displacement, y=0., z=0.)
         point = Point(x=-(displacement+marker_displacement), y=0., z=0)
 
-        origin_quaternion = Aurco_tf.transform.rotation
+        origin_quaternion = aruco_tf.transform.rotation
         origin_translation = (tf_trans.x, tf_trans.y, tf_trans.z)
         origin_matrix = np.dot(tf.transformations.translation_matrix(origin_translation), tf.transformations.quaternion_matrix\
                         ([origin_quaternion.x, origin_quaternion.y, origin_quaternion.z, origin_quaternion.w]))
         
         origin_point = np.array([point_origin.x, point_origin.y, point_origin.z, 1]) 
         origin_new = np.dot(origin_matrix, origin_point) # marker origin point(base odom)
-        origin_pos = Point(x=origin_new[0], y=origin_new[1], z=origin_new[2]) # marker origin point(base odom)
-
+        
         v = np.array([point.x, point.y, point.z, 1]) # offset point
         v_new = np.dot(origin_matrix,v) # offset point
         point_new = Point(x=v_new[0], y=v_new[1], z=v_new[2]) # offset point
-        
-        # if (getEuclidianDistance(point_new, backup_pose) < 0.02):
-        #     isChange = False
-        #     return Path(), isChange
         backup_pose = point_new
 
-        start_point = Point(x=robot_odom.pose.pose.position.x, y=robot_odom.pose.pose.position.y, z=0.) # now robot odom position
         q = (
             robot_odom.pose.pose.orientation.x,
             robot_odom.pose.pose.orientation.y,
             robot_odom.pose.pose.orientation.z,
             robot_odom.pose.pose.orientation.w
         )
+        robot_angle = tf.transformations.euler_from_quaternion(q)[2]
+        current_robot_pose = Pose2D(x=robot_odom.pose.pose.position.x, y=robot_odom.pose.pose.position.y, theta=robot_angle) # now robot odom position
+        
         q_tf = (origin_quaternion.x, origin_quaternion.y, origin_quaternion.z, origin_quaternion.w)
-        robot_angle = tf.transformations.euler_from_quaternion(q)
+        
         tf_angle = tf.transformations.euler_from_quaternion(q_tf)
-        debug_point.point = point_new
-        debug_pub.publish(debug_point)
+        pose_new = Pose2D(x=point_new.x, y=point_new.y, theta=tf_angle[2])
+        origin_pos = Pose2D(x=origin_new[0], y=origin_new[1], theta=tf_angle[2]) # marker origin point(base odom)
         sv = math.hypot(robot_odom.twist.twist.linear.x, robot_odom.twist.twist.linear.y)
-        return compute_plan(start_point, np.rad2deg(robot_angle[2]), 
-                            point_new, np.rad2deg(tf_angle[2]), 
-                            origin_pos, q,
-                            sv, 0.2), isChange # get_rotation_angle(v_new,origin_new)
-    else: return Path(), isChange
+        result_path = compute_plan(current_robot_pose,
+                            pose_new, 
+                            origin_pos, robot_odom.header.frame_id,
+                            sv, 0.2, dt=0.1)
+        pub.publish(result_path)
+        
 
 def sub_TF():
     global callback_trigger, backup_pose
-    global last_plan_info, tracking_state
-    global debug_pub
+    global tracking_state
+    global pub
+    global cm
     callback_trigger = False
     backup_pose = Point()
-    last_plan_info = {}
-    last_plan_info['across_displacement'] = False
-    last_plan_info['last_plan'] = Path()
-    last_plan_info['displacement_index'] = 0
     tracking_state = "NOT_WORKING"
-    rospy.init_node('subscribeTF', anonymous=True)
+    rospy.init_node('subscribeTF')
+    cm = CallbackManager()
+    cm.register("planning", cal_plan)
+    global path_displacement, robot_size, marker_displacement
     path_displacement = float(rospy.get_param("~path_displacement"))
     robot_size = float(rospy.get_param("~robot_size"))
     marker_displacement = float(rospy.get_param("~marker_displacement"))
     print("path_displacement : ", path_displacement)
     print("robot_size : ", robot_size)
     print("marker_displacement : ", marker_displacement)
-    # rospy.Subscriber("tf_list", TFMessage, callback_arucoTF)
     rospy.Subscriber("filtered_tf", TransformStamped, callback_arucoTF)
     rospy.Subscriber("odom", Odometry, callback_odomTF)
     rospy.Subscriber("mpc_state", String, callback_tracking_state)
-    rospy.Subscriber("nmpc_ros/local_plan", Path, callback_localplan)
     pub = rospy.Publisher('compute_Path', Path, queue_size=1)
-    debug_pub = rospy.Publisher("debug_point", PointStamped, queue_size=1)
-    while not rospy.is_shutdown():
-        if not callback_trigger:
-            rospy.sleep(0.1)
-            continue
-        plan,isChange = cal_plan(path_displacement, robot_size+marker_displacement)
-        if len(plan.poses) != 0:
-            if isChange:
-                pub.publish(plan)
-        callback_trigger = False
-        rospy.sleep(0.1)
+    rospy.spin()
     
 
 if __name__=='__main__':
