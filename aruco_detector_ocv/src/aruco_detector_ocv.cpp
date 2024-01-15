@@ -116,10 +116,10 @@ tf2::Vector3 cv_vector3d_to_tf_vector3(const Vec3d &vec) {
 }
 
 double getPrec(std::vector<int> ids, int i){
- 	vector<int> current_vector(num_detected);
-	current_vector = ids_hashmap[ids[i]];
-        int num_detections = std::accumulate(current_vector.begin(), current_vector.end(), 0);
-	return (double) num_detections/num_detected *100;
+    vector<int> current_vector(num_detected);
+    current_vector = ids_hashmap[ids[i]];
+    int num_detections = std::accumulate(current_vector.begin(), current_vector.end(), 0);
+    return (double) num_detections/num_detected *100;
 }
 
 tf2::Quaternion cv_vector3d_to_tf_quaternion(const Vec3d &rotation_vector) {
@@ -157,11 +157,14 @@ void callback_camera_info(const CameraInfoConstPtr &msg) {
 
 void update_params_cb(const std_msgs::Empty &msg)
 {
-	// update the parameters:
-	//nh.getParam("/blur_window_size", blur_window_size);
+    // update the parameters:
+    //nh.getParam("/blur_window_size", blur_window_size);
 } 
 
 void callback(const ImageConstPtr &image_msg) {
+    ros::Time st, et;
+    st = ros::Time::now();
+    if (!set_start) return;
     if (!camera_model_computed) {
         ROS_INFO("camera model is not computed yet");
         return;
@@ -173,8 +176,7 @@ void callback(const ImageConstPtr &image_msg) {
 
     // Smooth the image to improve detection results
     if (enable_blur) {
-        GaussianBlur(image, image, Size(blur_window_size, blur_window_size), 0,
-                     0);
+        GaussianBlur(image, image, Size(blur_window_size, blur_window_size), 0, 0);
     }
 
     // Detect the markers
@@ -184,9 +186,7 @@ void callback(const ImageConstPtr &image_msg) {
 
     // publish aruco info:
     alfons_msgs::ArucoInfo ar_msg;
-    for(int i = 0;i<ids.size();i++)
-    {
-        //std_msgs::Int16 id_num = ;
+    for(int i = 0;i<ids.size();i++) {
         vector<Point2f> one_corner = corners[i];
         ar_msg.marker_ids.push_back(ids[i]);
         ar_msg.center_x_px.push_back((one_corner[0].x+one_corner[1].x+one_corner[2].x+one_corner[3].x)/4);
@@ -198,14 +198,11 @@ void callback(const ImageConstPtr &image_msg) {
  
     // Show image if no markers are detected
     if (ids.empty()) {
-       // ROS_INFO("Markers not found");
        cv::putText(display_image, "no markers found", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, CV_RGB(255, 0, 0), 3);
         if (show_detections) {
-            //imshow("markers", display_image);
-	if (result_img_pub_.getNumSubscribers() > 0)
-	{
-		result_img_pub_.publish(cv_bridge::CvImage(std_msgs::Header(), "bgr8", display_image).toImageMsg());
-	}
+            if (result_img_pub_.getNumSubscribers() > 0) {
+                result_img_pub_.publish(cv_bridge::CvImage(std_msgs::Header(), "bgr8", display_image).toImageMsg());
+            }
             auto key = waitKey(1);
             if (key == 27) {
                 ROS_INFO("ESC pressed, exit the program");
@@ -215,39 +212,34 @@ void callback(const ImageConstPtr &image_msg) {
        // return;
     }
 
-if(ids.size()>0)
-{
-    // Compute poses of markers
-    vector<Vec3d> rotation_vectors, translation_vectors;
-    aruco::estimatePoseSingleMarkers(corners, marker_size, intrinsic_matrix, distortion_coefficients,
-                                     rotation_vectors, translation_vectors);
-    for (auto i = 0; i < rotation_vectors.size(); ++i) {
-        aruco::drawAxis(image, intrinsic_matrix, distortion_coefficients,
-                        rotation_vectors[i], translation_vectors[i], marker_size * 0.5f);
-    }
+    else if(ids.size()>0) {
+        // Compute poses of markers
+        vector<Vec3d> rotation_vectors, translation_vectors;
+        aruco::estimatePoseSingleMarkers(corners, marker_size, intrinsic_matrix, distortion_coefficients,
+                                        rotation_vectors, translation_vectors);
+        for (auto i = 0; i < rotation_vectors.size(); ++i) {
+            aruco::drawAxis(image, intrinsic_matrix, distortion_coefficients,
+                            rotation_vectors[i], translation_vectors[i], marker_size * 0.5f);
+        }
 
-    // Draw marker poses
-    if (show_detections) {
-        aruco::drawDetectedMarkers(display_image, corners, ids);
-    }
-	if (result_img_pub_.getNumSubscribers() > 0)
-	{
-
-                cv::putText(display_image, ""+SSTR(image_width)+"x"+SSTR(image_height)+"@"+SSTR(image_fps)+"FPS m. size: "+SSTR(marker_size)+" m"+" blur: "+SSTR(blur_window_size), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.8, CV_RGB(255, 255, 0), 2);
-
-	for(int i = 0; i<ids.size();i++)
-	{
-	double prec = getPrec(ids,i);
-	if(prec>=min_prec_value)
+        // Draw marker poses
+        if (show_detections) {
+            aruco::drawDetectedMarkers(display_image, corners, ids);
+        }
+        if (result_img_pub_.getNumSubscribers() > 0)
         {
-        Vec3d distance_z_first = translation_vectors[i];
-        double distance_z = ROUND3(distance_z_first[2]);
+            cv::putText(display_image, ""+SSTR(image_width)+"x"+SSTR(image_height)+"@"+SSTR(image_fps)+"FPS m. size: "+SSTR(marker_size)+" m"+" blur: "+SSTR(blur_window_size), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.8, CV_RGB(255, 255, 0), 2);
+
+            for(int i = 0; i<ids.size();i++){
+                double prec = getPrec(ids,i);
+                if(prec>=min_prec_value){
+                    Vec3d distance_z_first = translation_vectors[i];
+                    double distance_z = ROUND3(distance_z_first[2]);
                     cv::putText(display_image, "id: "+SSTR(ids[i])+" z dis: "+SSTR(distance_z)+" m  "+SSTR(ROUND2(prec))+" %", cv::Point(10, 70+i*30), cv::FONT_HERSHEY_SIMPLEX, 0.9, CV_RGB(0, 255, 0), 2);
+                }
+            }
             result_img_pub_.publish(cv_bridge::CvImage(std_msgs::Header(), "bgr8", display_image).toImageMsg());
         }
-	}
-	}	
-        //imshow("markers", display_image); // opencv im_show
         auto key = waitKey(1);
         if (key == 27) {
             ROS_INFO("ESC pressed, exit the program");
@@ -255,22 +247,18 @@ if(ids.size()>0)
         }
 
 
-    // Publish TFs for each of the markers
-    // static tf2_ros::TransformBroadcaster br;
-    auto stamp = ros::Time::now();
+        // Publish TFs for each of the markers
+        // static tf2_ros::TransformBroadcaster br;
+        auto stamp = ros::Time::now();
 
-    // Create and publish tf message for each marker
-    tf2_msgs::TFMessage tf_msg_list;
-    geometry_msgs::PoseStamped marker_pose_raw;
-    tf2::Quaternion q_original, q_rotated, q_roll, q_yaw;
-    q_roll.setRPY(-M_PI_2, 0, 0);
-    q_yaw.setRPY(0,0,M_PI_2);
-    if(set_start){
-        for (auto i = 0; i < rotation_vectors.size(); ++i)
-        {
-
-            if(ids[i] == int(marker_id) && getPrec(ids,i)>min_prec_value)
-            {
+        // Create and publish tf message for each marker
+        tf2_msgs::TFMessage tf_msg_list;
+        geometry_msgs::PoseStamped marker_pose_raw;
+        tf2::Quaternion q_original, q_rotated, q_roll, q_yaw;
+        q_roll.setRPY(-M_PI_2, 0, 0);
+        q_yaw.setRPY(0,0,M_PI_2);
+        for (auto i = 0; i < rotation_vectors.size(); ++i) {
+            if(ids[i] == int(marker_id) && getPrec(ids,i)>min_prec_value) {
                 // ROS_INFO("aruco markers tf %d", marker_id);
                 auto translation_vector = translation_vectors[i];
                 auto rotation_vector = rotation_vectors[i];
@@ -311,93 +299,65 @@ if(ids.size()>0)
                 
             }
         }
-        tf_list_pub_.publish(tf_msg_list);
-        raw_marker_pub_.publish(marker_pose_raw);
+        if (!tf_msg_list.transforms.empty()) { 
+            tf_list_pub_.publish(tf_msg_list);
+            raw_marker_pub_.publish(marker_pose_raw);
+        }
     }
-}
 
-// rotate vector:
-// [ 1 2 3 4 5 ]  --> [ 5 1 2 3 4 ]
-if(num_detected>0)
-{
-//std::cout<<"ids size: vor erase"<<ids.size()<<std::endl;
-map<int, vector<int>>::iterator il;
-for ( il = ids_hashmap.begin(); il != ids_hashmap.end(); il++ )
-{  
- vector<int> current_vector(num_detected);
-  current_vector = il->second;
- rotate(current_vector.begin(),current_vector.end()-1,current_vector.end());
-il->second = current_vector;
-}
+    if(num_detected>0) {
+        map<int, vector<int>>::iterator il;
+        for ( il = ids_hashmap.begin(); il != ids_hashmap.end(); il++ ) {  
+            vector<int> current_vector(num_detected);
+            current_vector = il->second;
+            rotate(current_vector.begin(),current_vector.end()-1,current_vector.end());
+            il->second = current_vector;
+        }
 
-// gehe alle in der Liste bestehenden durch:
-map<int, vector<int>>::iterator it;
-for ( it = ids_hashmap.begin(); it != ids_hashmap.end(); it++ )
-{  
-  bool current_id_was_found = false;
-  for(int j=0;j<ids.size();j++)
-  {
-   if( (ids[j] == it->first) && (it->second.size()>1))
-   {
-	current_id_was_found = true;
-        ids.erase (ids.begin()+j);
-	//std::cout<<"erase "<<ids[j]<<"it first"<<it->first<<"size_second "<<it->second.size()<<std::endl;
-   }
-  }
-  vector<int> current_vector(num_detected);
-  current_vector = it->second;
-  current_vector[0] = 0;
-  if (current_id_was_found)
-  {
-   current_vector[0] =1;
-  //std::cout<<" 1 was set"<<it->first<<std::endl;
-  }
-it->second = current_vector;
-}
+        // gehe alle in der Liste bestehenden durch:
+        map<int, vector<int>>::iterator it;
+        for ( it = ids_hashmap.begin(); it != ids_hashmap.end(); it++ ) {  
+            bool current_id_was_found = false;
+            for(int j=0;j<ids.size();j++) {
+                if( (ids[j] == it->first) && (it->second.size()>1)) {
+                    current_id_was_found = true;
+                    ids.erase (ids.begin()+j);
+                }
+            }
+            vector<int> current_vector(num_detected);
+            current_vector = it->second;
+            current_vector[0] = 0;
+            if (current_id_was_found) {
+                current_vector[0] =1;
+            }
+            it->second = current_vector;
+        }
 
+        // adde alle restlichen in ids (das sind die neu erkannten)
+        for(int i = 0;i<ids.size();i++) {
+            std::map<int, vector<int>>::iterator ittt = ids_hashmap.begin();
+            vector<int> tmpp(num_detected, 0);
+            tmpp[0] = 1;
+            std::string aa = "";
+            for(int i=0;i<num_detected;i++)
+                aa+=SSTR(tmpp[i])+",";
+            ids_hashmap.insert(make_pair(ids[i], tmpp));
+        }
 
-// adde alle restlichen in ids (das sind die neu erkannten)
-for(int i = 0;i<ids.size();i++)
-{
-
-   std::map<int, vector<int>>::iterator ittt = ids_hashmap.begin();
-   vector<int> tmpp(num_detected, 0);
-   tmpp[0] = 1;
-   std::string aa = "";
-   for(int i=0;i<num_detected;i++)
-	aa+=SSTR(tmpp[i])+",";
-
-   ids_hashmap.insert(make_pair(ids[i], tmpp));
-   //std::cout<<"added new: "<<ids[i]<<" "<<aa<<" size tmpp"<<tmpp.size()<<std::endl;
-}
-
-//// print the hashmap:
-map<int, vector<int>>::iterator itt;
-for ( itt = ids_hashmap.begin(); itt != ids_hashmap.end(); itt++ )
-{
-   vector<int> tmp(num_detected, 0);
-   tmp = itt->second; 
-// hack -> no idea why this is necessary
-if(itt->second.size() ==0)
-{
-   vector<int> tmpe(num_detected, 0);
-   tmpe[0] = 1;
-itt->second =tmpe;
-} // end of hack
-//   std::string a = SSTR(itt->first)+"  "+SSTR(itt->second.size())+ " ";
-	
-
-
-//   for(int i=0;i<tmp.size();i++)
-//{
-//   a+= SSTR(tmp[i])+",";
-//}
-//std::cout<<a<<std::endl;
-}
-
-} // num_detected>0
-
-
+        //// print the hashmap:
+        map<int, vector<int>>::iterator itt;
+        for ( itt = ids_hashmap.begin(); itt != ids_hashmap.end(); itt++ ) {
+            vector<int> tmp(num_detected, 0);
+            tmp = itt->second; 
+            if(itt->second.size() ==0) {
+                vector<int> tmpe(num_detected, 0);
+                tmpe[0] = 1;
+                itt->second =tmpe;
+            }
+        }
+    } // num_detected>0
+    et = ros::Time::now();
+    ROS_DEBUG("[imageCallback] cycle time : %f",(et - st).toSec());
 }
 
 // TODO: slider extension
