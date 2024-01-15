@@ -95,7 +95,6 @@ def quintic_polynomials_planner(sx, sy, syaw, gx, gy, gyaw, dt, sv = 0.0, sa=0.0
     time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
 
     T = getTime(sx, sy, gx, gy, sv, gv, max_accel)
-    print("[Planner] time : %s"%T)
 
     xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
     yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
