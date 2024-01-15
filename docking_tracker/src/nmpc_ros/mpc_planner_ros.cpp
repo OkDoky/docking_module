@@ -551,16 +551,14 @@ namespace mpc_ros{
         double _dx = _g_path.poses[last_index].pose.position.x - _rx;
         double _dy = _g_path.poses[last_index].pose.position.y - _ry;
         double _dist = hypot(_dx, _dy);
-        if (_dist > _path_displacement){
-            if (_arrival_state == WAITING_FOR_DETECTION){
-                ROS_WARN("[ROSNMPC] get new plan");
-                _l_path = *pathMsg;
-                _arrival_state = GETPLAN;
-                ROS_WARN("[ROSNMPC] state Transition WAITING_FOR_DETECTION -> GETPLAN");
-            } else if (_arrival_state == TRACKING){
-                ROS_WARN("[ROSNMPC] update global plan");
-                _l_path = *pathMsg;
-            }
+        if (_arrival_state == WAITING_FOR_DETECTION){
+            ROS_WARN("[ROSNMPC] get new plan");
+            _l_path = *pathMsg;
+            _arrival_state = GETPLAN;
+            ROS_WARN("[ROSNMPC] state Transition WAITING_FOR_DETECTION -> GETPLAN");
+        } else if (_arrival_state == TRACKING){
+            ROS_DEBUG("[ROSNMPC] update global plan");
+            _l_path = *pathMsg;
         }
     }
 
