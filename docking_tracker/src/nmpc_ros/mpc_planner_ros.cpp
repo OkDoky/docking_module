@@ -394,7 +394,7 @@ namespace mpc_ros{
 
         std::vector<double> pointVector = {point[0] - lineStart[0], point[1] - lineStart[1]};
 
-        double crossProduct = lineDirectionX * pointVector[1] - lineDirectionY * pointVector[0];\
+        double crossProduct = lineDirectionX * pointVector[1] - lineDirectionY * pointVector[0];
         return crossProduct;
     }
 
@@ -428,6 +428,7 @@ namespace mpc_ros{
         double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
         std::vector<double> _rpos = {_rx, _ry};
         std::vector<double> _goalpos = {_l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y};
+
         double _crossproduct = crossProductOnTheLine(_rpos, _goalpos, _goalyaw + M_PI/2.0);
         bool _crossFlag = determinCrossTheLine(_crossproduct_prev, _crossproduct);
         _crossproduct_prev = _crossproduct;
