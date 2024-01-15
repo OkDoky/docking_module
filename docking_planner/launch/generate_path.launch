@@ -1,5 +1,5 @@
 <launch>
-    <arg name="path_displacement"   default="0.5"/>
+    <arg name="path_displacement"   default="0.35"/>
     <arg name="robot_size"          default="0.2"/>
     <arg name="marker_displacement" default="0.05"/>
     
