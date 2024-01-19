@@ -1,4 +1,6 @@
 <launch>
+    <arg name="marker_type" default="april" doc="opt: april, aruco"/>
+
     <arg name="image_width" default="1920" /> <!-- 640, 1920 -->
     <arg name="image_height" default="1080" /> <!-- 480, 1080 -->
     <arg name="camera" default="camera/color/image_raw" />
@@ -13,24 +15,43 @@
     <arg name="marker_id" default="7" />
     <arg name="num_train_sample" default="10"/>
     <param name="marker_id" type="int" value="$(arg marker_id)"/>
-    <node pkg="aruco_detector_ocv" type="node" name="aruco_detector_ocv" output="screen">
-        <param name="camera" type="string" value="$(arg camera)"/>
-        <param name="camera_info" type="string" value="$(arg camera_info)"/>
-        <param name="tf_prefix" type="string" value="$(arg tf_prefix)"/>
-        <param name="show_detections" type="bool" value="$(arg show_detections)"/>
-        <param name="marker_size" type="double" value="$(arg marker_size)"/>
-        <param name="dictionary_name" type="string" value="$(arg dictionary_name)"/>
-        <param name="image_width" type="double" value="$(arg image_width)"/>
-        <param name="image_height" type="double" value="$(arg image_height)"/>
-        <param name="blur_window_size" type="double" value="$(arg blur_window_size)"/>
-        <param name="num_detected" type="double" value="$(arg num_detected)"/>
-        <param name="min_prec_value" type="double" value="$(arg min_prec_value)"/>
-        <param name="marker_id" type="int" value="$(arg marker_id)"/>
-    </node>
-    <!-- <node name="detecting_marker" pkg="marker_detecting" type="detecting_marker.py" output="screen"/> -->
-    
+
+    <group if="$(eval marker_type == 'aruco')">
+        <node pkg="aruco_detector_ocv" type="node" name="aruco_detector_ocv" output="screen">
+            <param name="camera" type="string" value="$(arg camera)"/>
+            <param name="camera_info" type="string" value="$(arg camera_info)"/>
+            <param name="tf_prefix" type="string" value="$(arg tf_prefix)"/>
+            <param name="show_detections" type="bool" value="$(arg show_detections)"/>
+            <param name="marker_size" type="double" value="$(arg marker_size)"/>
+            <param name="dictionary_name" type="string" value="$(arg dictionary_name)"/>
+            <param name="image_width" type="double" value="$(arg image_width)"/>
+            <param name="image_height" type="double" value="$(arg image_height)"/>
+            <param name="blur_window_size" type="double" value="$(arg blur_window_size)"/>
+            <param name="num_detected" type="double" value="$(arg num_detected)"/>
+            <param name="min_prec_value" type="double" value="$(arg min_prec_value)"/>
+            <param name="marker_id" type="int" value="$(arg marker_id)"/>
+        </node>
+    </group>
+
+    <group if="$(eval marker_type == 'april')">
+        <node pkg="apriltag_ros" type="apriltag_ros_continuous_node" name="apriltag_node" clear_params="true" output="screen">
+            <remap from="image_rect" to="camera/color/image_raw"/>
+            <remap from="camera_info" to="camera/color/camera_info"/>
+
+            <param name="publish_tag_detections_image" type="bool" value="false"/>
+            <param name="queue_size" type="int" value="1"/>
+
+            <rosparam command="load" file="$(find apriltag_ros)/config/settings.yaml"/>
+            <rosparam command="load" file="$(find apriltag_ros)/config/tags.yaml"/>
+        </node>
+    </group>
+
     <node name="marker_kalmanfilter" pkg="marker_detecting" type="marker_kf.py" output="screen">
+        <param name="maker_type"    value="$(arg marker_type)"/>
         <param name="/marker_id"     value="$(arg marker_id)"/>
         <param name="num_train_sample" value="$(arg num_train_sample)"/>
+
+        <param name="detection_mode"        value="single"/>
+        <param name="target_id"             value="[1]"/>
     </node>
 </launch>
