@@ -474,7 +474,7 @@ namespace mpc_ros{
                 }
                 return;
             case ONLY_POSITION_ARRIVED:
-                if (_pdist < _xy_tolerance && abs(_etheta) < _yaw_tolerance){
+                if (abs(_etheta) < _yaw_tolerance){
                     reached_state = ARRIVED;
                     setState(reached_state);
                 }
