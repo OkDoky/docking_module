@@ -5,8 +5,11 @@ import time
 import math
 import traceback
 import rospy
+import tf
+import tf2_ros
 from tf2_msgs.msg import TFMessage
 from geometry_msgs.msg import TransformStamped, PoseStamped
+from apriltag_ros.msg import AprilTagDetectionArray
 from tf2_ros import TransformBroadcaster
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
@@ -19,19 +22,29 @@ def normalizeAngle(val, min_val, max_val):
 	return norm
 
 
-class KalmanTrack():
+class KFmarker():
     def __init__(self):
         rospy.init_node('detecting_marker', anonymous=True)
     
         self.filtered_tf_pub = rospy.Publisher("filtered_tf", TransformStamped, queue_size=1)
         self.filtered_pose_pub = rospy.Publisher("filtered_pose", PoseStamped, queue_size=1)
-        self.tf_list_callback = rospy.Subscriber("tf_list", TFMessage, self.tf_cb)
+        self.subs = []
+        self.marker_type = rospy.get_param("~marker_type", "april")
+        if self.marker_type == "april":
+            self.subs.append(rospy.Subscriber("tag_detections", AprilTagDetectionArray, self.apriltag_cb))
+            self.detection_mode = rospy.get_param("~detection_mode", "single")
+            self.target_id = eval(rospy.get_param("~target_id", "[1]"))
+            rospy.logwarn("[KFmarker] tag id is : %s"%self.target_id)
+        else:
+            self.subs.append(rospy.Subscriber("tf_list", TFMessage, self.aruco_cb))
+            self.target_id = int(rospy.get_param("/marker_id", 7))
+            rospy.logwarn("[KFmarker] marker id is : %s"%self.target_id)
     
         self.marker_tf = TransformStamped()
         self.br = TransformBroadcaster()
         
-        self.marker_id = int(rospy.get_param("/marker_id", 7))
-        rospy.logwarn("[KFmarker] marker id is : %s"%self.marker_id)
+        self.tf_buffer = tf2_ros.Buffer()
+        listener = tf2_ros.TransformListener(self.tf_buffer)
         
         self.measurements = np.empty((0,3))
         
@@ -68,14 +81,54 @@ class KalmanTrack():
         self.init_trained = False
         self.x_now = None
         self.P_now = None
+    
+    def transform_to_global_frame(self, target_frame_id, _tf):
+        new_tf = TransformStamped()    
+        ## transform..
+        try:
+            trans = self.tf_buffer.lookup_transform(target_frame_id, _tf.child_frame_id, rospy.Time(0))
+
+            new_tf.header = trans.header
+            new_tf.child_frame_id = _tf.child_frame_id
+            new_tf.transform.translation = trans.transform.translation
+            new_tf.transform.rotation = trans.transform.rotation
+
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            rospy.logerr("[Transform] failed to transform tf...")
+            return None
+
+        return new_tf
         
-    def tf_cb(self, msg):
+    def apriltag_cb(self, msg):
+        if bool(rospy.get_param("reset_marker", False)):
+            rospy.set_param("reset_marker", False)
+            self.target_id = eval(rospy.get_param("~target_id", "[1]"))
+            self.reset()
+            
+        if not len(msg.detections) == 0:
+            for info in msg.detections:
+                try:
+                    if list(info.id) == self.target_id:
+                        td = time.time() - self.time_before
+                        self.delta_t = min(self.default_delta_t, td)
+                        pred = self.prediction(info.pose.pose.pose.position.x,
+                                            info.pose.pose.pose.position.y,
+                                            euler_from_quaternion([info.pose.pose.pose.orientation.x,
+                                                                    info.pose.pose.pose.orientation.y,
+                                                                    info.pose.pose.pose.orientation.z,
+                                                                    info.pose.pose.pose.orientation.w,])[2])
+                        if pred is not None:
+                            self.publish_pose(pred, msg.header)
+                except IndexError:
+                    rospy.logerr("[KFmarker] check topic, is not posible...%s"%info)
+        
+    def aruco_cb(self, msg):
         if bool(rospy.get_param("reset_marker", False)):
             rospy.set_param("reset_marker", False)
             self.reset()
         if not len(msg.transforms) == 0:
             for _tf in msg.transforms:
-                if int(_tf.child_frame_id) == self.marker_id:
+                if int(_tf.child_frame_id) == self.target_id:
                     td = time.time() - self.time_before
                     self.delta_t = min(self.default_delta_t, td)
                     pred = self.prediction(_tf.transform.translation.x,
@@ -104,7 +157,9 @@ class KalmanTrack():
         # publish transformStamped
         transform = TransformStamped()
         transform.header = header
-        transform.child_frame_id = str(self.marker_id)
+        transform.child_frame_id = str(self.target_id)
+        if self.marker_type == "april":
+            transform.child_frame_id = "tag_%s"%self.target_id[0]
         transform.transform.translation.x = pred[0]
         transform.transform.translation.y = pred[2]
         transform.transform.rotation.x = q[0]
@@ -147,7 +202,7 @@ class KalmanTrack():
 
             self.init_trained = True
         except Exception as e:
-            rospy.logerr("[KalmanTrack] init_training is failed...(%s)"%traceback.format_exc())
+            rospy.logerr("[KFmarker] init_training is failed...(%s)"%traceback.format_exc())
             
 
 
@@ -167,12 +222,12 @@ class KalmanTrack():
             self.update_filter(pos_x,pos_y,pos_th)
         else:
             self.init_train()
-            rospy.logerr("[KalmanTrack] unknown errs, init_trained: %d/train_sample: %d"%(self.init_trained,self.measurements.shape[0]))
+            rospy.logerr("[KFmarker] unknown errs, init_trained: %d/train_sample: %d"%(self.init_trained,self.measurements.shape[0]))
         
         return self.x_now
 
 if __name__ == '__main__':
-    filter = KalmanTrack()
+    filter = KFmarker()
     try:
         rospy.spin()
     except KeyboardInterrupt:
