@@ -15,6 +15,7 @@
     <arg name="marker_id" default="7" />
     <arg name="num_train_sample" default="10"/>
     <param name="marker_id" type="int" value="$(arg marker_id)"/>
+    <arg name="model"       default="$(env ROBOT_MODEL)"/>
 
     <group if="$(eval marker_type == 'aruco')">
         <node pkg="aruco_detector_ocv" type="node" name="aruco_detector_ocv" output="screen">
@@ -35,8 +36,13 @@
 
     <group if="$(eval marker_type == 'april')">
         <node pkg="apriltag_ros" type="apriltag_ros_continuous_node" name="apriltag_node" clear_params="true" output="screen">
-            <remap from="image_rect" to="camera/color/image_raw"/>
-            <remap from="camera_info" to="camera/color/camera_info"/>
+            <!-- detect front marker -->
+            <remap from="image_rect" to="camera/color/image_raw" if="$(eval model == 'omo_r1')"/>
+            <remap from="camera_info" to="camera/color/camera_info" if="$(eval model == 'omo_r1')"/>
+
+            <!-- detect rear marker -->
+            <remap from="image_rect" to="camera_rear/color/image_raw" if="$(eval model == 'moro')"/>
+            <remap from="camera_info" to="camera_rear/color/camera_info" if="$(eval model == 'moro')"/>
 
             <param name="publish_tag_detections_image" type="bool" value="false"/>
             <param name="queue_size" type="int" value="1"/>
