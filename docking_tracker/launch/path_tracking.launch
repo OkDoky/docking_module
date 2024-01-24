@@ -4,6 +4,7 @@
         <param name="local_frame_id"           value="base_footprint"/>
         <param name="path_topic_name"           value="/desired_path"/>
     </node> -->
+    <arg name="direction"                       default="front"/>
 
     <node pkg="docking_tracker" name="nmpc_ros" type="nmpc_ros" respawn="true">
         <param name="control_frequency"         value="20.0"/>
@@ -18,7 +19,7 @@
         <param name="w_accel"                   value="200"/>
         <param name="w_angvel_d"                value="300"/>
         <param name="w_accel_d"                 value="0.1"/>
-        <param name="max_angvel"                value="0.2"/>
+        <param name="max_angvel"                value="0.1"/>
         <param name="max_throttle"              value="0.2"/>
         <param name="bound_value"               value="20.0"/>
         <param name="path_length"               value="0.6"/>
@@ -26,6 +27,8 @@
         <param name="min_linear_speed"          value="0.08"/>
         <param name="xy_tolerance"              value="0.02"/>
         <param name="yaw_tolerance"             value="0.005"/>
+        <param name="heading_front"             value="true"  if="$(eval direction == 'front')"/>
+        <param name="heading_front"             value="false"  if="$(eval direction == 'rear')"/>
         
         <remap from="/plan"                     to="compute_Path"/>
     </node>
