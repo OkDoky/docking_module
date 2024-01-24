@@ -169,6 +169,7 @@ namespace mpc_ros{
             double _pathLength, _goalRadius, _waypointsDist;
             int _downSampling;
             bool _debug_info, _delay_mode;
+            bool _heading_front;
             double polyeval(Eigen::VectorXd coeffs, double x);
             Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals, int order);
             std::string str_state_before;
