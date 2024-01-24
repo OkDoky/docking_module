@@ -38,8 +38,14 @@ robot_odom = Odometry()
 def is_near_target_value(target, value, epsilon=1e-9):
     return abs(target-value) < epsilon
 
+def dot_product(v,w):
+    return v.x * w.x + v.y * w.y
+
+def magnitude(v):
+    return math.sqrt(v.x ** 2 + v.y ** 2)
+
 def has_cross_line(a, b, c):
-    """_summary_
+    """check angle between a,b,c point
 
     Args:
         a (Pose2D): current robot pose
@@ -49,20 +55,14 @@ def has_cross_line(a, b, c):
     Returns:
         Bool : return True if robot cross the line start with straight
     """
-    if is_near_target_value(math.pi/2.0, c.theta) or is_near_target_value(-math.pi/2.0, c.theta):
-        # 이 경우, 선은 수평선이므로 A의 x 좌표만 비교하면 됨
-        return a.x > b.x
-    # Calculate the slope of the line perpendicular to the direction at C
-    perpendicular_slope = -1 / math.tan(c.theta)
+    ab = Pose2D(x=b.x - a.x, y=b.y - a.y, theta=0.0)
+    bc = Pose2D(x=c.x - b.x, y=c.y - b.y, theta=0.0)
 
-    # The equation of the line: y = mx + c
-    # We need to find 'c' (y-intercept) for the line
-    line_y_intercept = b.y - perpendicular_slope * b.x
+    dot_prod = dot_product(ab, bc)
+    angle = math.acos(dot_prod / (magnitude(ab) * magnitude(bc)))
 
-    # Substitute point A into the line equation to determine its position relative to the line
-    side = a.y - (perpendicular_slope * a.x + line_y_intercept)
-
-    return side < 0  # Returns True if A is on one side, False if on the other
+    angle_deg = math.degrees(angle)
+    return angle_deg > 90.
 
 def move_pose(target_pose, dist=0.1):
     dx = math.cos(target_pose.theta) * dist
@@ -179,10 +179,15 @@ def callback_odomTF(sub_odom):
     
 def callback_tracking_state(msg):
     global backup_pose, tracking_state
+    global path_displacement, robot_size, marker_displacement
+    rospy.logwarn("[TrackingStateCallback] %s"%msg.data)
     if not msg.data == tracking_state:
         tracking_state = msg.data
         if tracking_state in ["NOT_WORKING", "ARRIVED"]:
             backup_pose = Point()
+            path_displacement = float(rospy.get_param("~path_displacement"))
+            robot_size = float(rospy.get_param("~robot_size"))
+            marker_displacement = float(rospy.get_param("~marker_displacement"))
 
 def get_rotation_angle(p1, p2):
     v = (p2[0]-p1[0], p2[1]-p1[1])
@@ -272,7 +277,7 @@ def sub_TF():
     print("marker_displacement : ", marker_displacement)
     rospy.Subscriber("filtered_tf", TransformStamped, callback_arucoTF)
     rospy.Subscriber("odom", Odometry, callback_odomTF)
-    rospy.Subscriber("mpc_state", String, callback_tracking_state)
+    rospy.Subscriber("docking/status", String, callback_tracking_state)
     pub = rospy.Publisher('compute_Path', Path, queue_size=1)
     rospy.spin()
     
