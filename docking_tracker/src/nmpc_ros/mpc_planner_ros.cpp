@@ -87,6 +87,7 @@ namespace mpc_ros{
         private_nh.param<double>("min_linear_speed", _min_linear_speed, -0.3);
         private_nh.param<double>("xy_tolerance", _xy_tolerance, 0.05);
         private_nh.param<double>("yaw_tolerance", _yaw_tolerance, 0.05);
+        private_nh.param<bool>("heading_front", _heading_front, true);
 
         _dt = double(1.0/_control_frequency);
         _default_max_linear_speed = _max_linear_speed;
