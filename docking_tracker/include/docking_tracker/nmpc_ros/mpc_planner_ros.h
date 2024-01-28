@@ -85,6 +85,14 @@ std::string enumToString(mpc_state state){
     }
 }
 
+double normalizeAngle(const double angle, const double min, const double max){
+    double range = max - min;
+    double result = angle;
+    while (result >= max) result -= range;
+    while (result < min) result += range;
+    return result;
+}
+
 namespace mpc_ros{
 
     class MPCPlannerROS
@@ -131,7 +139,7 @@ namespace mpc_ros{
             vector<double> mpc_theta;
 
             ros::NodeHandle _nh;
-            ros::Subscriber _sub_odom, _sub_global_plan;
+            ros::Subscriber _sub_odom, _sub_global_plan, _sub_feedback;
             ros::Publisher _pub_downsampled_path, _pub_mpctraj;
             ros::Publisher cmd_vel_pub_;
             ros::Publisher cte_pub_;
@@ -144,7 +152,9 @@ namespace mpc_ros{
 
             // init robot pose
             double _rx, _ry, _rtheta;
+            double _rotation_rtheta;
             double _fvx, _fvy, _fvw; // linear x vel, linear y vel, angular yaw vel
+            double _fvlinear, _fvangular;
 
             // init goal tolerance
             double _xy_tolerance, _yaw_tolerance;
@@ -174,6 +184,7 @@ namespace mpc_ros{
             Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals, int order);
             std::string str_state_before;
 
+            void feedbackCB(const geometry_msgs::Twist::ConstPtr& feedbackMsg);
             void odomCB(const nav_msgs::Odometry::ConstPtr& odomMsg);
             void pathCB(const nav_msgs::Path::ConstPtr& pathMsg);
             bool dockingCB(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res);

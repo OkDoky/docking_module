@@ -50,6 +50,7 @@ namespace mpc_ros{
         //Publishers and Subscribers
         _sub_odom   = _nh.subscribe("odom", 1, &MPCPlannerROS::odomCB, this);
         _sub_global_plan = _nh.subscribe("/plan", 1, &MPCPlannerROS::pathCB, this);
+        _sub_feedback = _nh.subscribe("feedback_vel", 1, &MPCPlannerROS::feedbackCB, this);
         _pub_mpctraj   = _nh.advertise<nav_msgs::Path>("mpc_trajectory", 1);// MPC trajectory output
         _pub_downsampled_path  = _nh.advertise<nav_msgs::Path>("mpc_reference", 1); // reference path for MPC ///mpc_reference 
         _client_set_marker_detect = _nh.serviceClient<std_srvs::SetBool>("set_marker_detect");
@@ -59,9 +60,12 @@ namespace mpc_ros{
         _rx = 0.0;
         _ry = 0.0;
         _rtheta = 0.0;
+        _rotation_rtheta = 0.0;
         _fvx = 0.0;
         _fvy = 0.0;
         _fvw = 0.0;
+        _fvlinear = 0.0;
+        _fvangular = 0.0;
 
         _crossproduct_prev = 0.0;
 
@@ -88,6 +92,10 @@ namespace mpc_ros{
         private_nh.param<double>("xy_tolerance", _xy_tolerance, 0.05);
         private_nh.param<double>("yaw_tolerance", _yaw_tolerance, 0.05);
         private_nh.param<bool>("heading_front", _heading_front, true);
+        if (!_heading_front){
+            _max_linear_speed = -(abs(_min_linear_speed));
+            _min_linear_speed = -(abs(_max_linear_speed));
+        }
 
         _dt = double(1.0/_control_frequency);
         _default_max_linear_speed = _max_linear_speed;
@@ -117,11 +125,13 @@ namespace mpc_ros{
 
 	void MPCPlannerROS::setParam(){
         //Init parameters for MPC object
+        // fg_eval params
         _mpc_params["DT"] = _dt;
         _mpc_params["STEPS"]    = _mpc_steps;
         _mpc_params["REF_CTE"]  = _ref_cte;
         _mpc_params["REF_ETHETA"] = _ref_etheta;
         _mpc_params["REF_V"]    = _ref_vel;
+        
         _mpc_params["W_CTE"]    = _w_cte;
         _mpc_params["W_EPSI"]   = _w_etheta;
         _mpc_params["W_V"]      = _w_vel;
@@ -129,6 +139,7 @@ namespace mpc_ros{
         _mpc_params["W_A"]      = _w_accel;
         _mpc_params["W_DANGVEL"] = _w_angvel_d;
         _mpc_params["W_DA"]     = _w_accel_d;
+        // mpc params
         _mpc_params["ANGVEL"]   = _max_angvel;
         _mpc_params["MAXTHR"]   = _max_throttle;
         _mpc_params["BOUND"]    = _bound_value;
@@ -205,9 +216,12 @@ namespace mpc_ros{
         const double px = _rx; //pose: odom frame
         const double py = _ry;
         double theta = _rtheta;
-        const double v = hypot(_fvx,_fvy); //twist: body fixed frame
+        double rotation_theta = _rotation_rtheta;
+        // const double v = hypot(_fvx,_fvy); //twist: body fixed frame
+        const double v = _fvlinear;
         // Update system inputs: U=[w, throttle]
-        const double w = _w; // steering -> w
+        // const double w = _w; // steering -> w
+        const double w = _fvangular;
         //const double steering = _steering;  // radian
         const double throttle = _throttle; // accel: >0; brake: <0
         const double dt = _dt;
@@ -261,8 +275,8 @@ namespace mpc_ros{
 
         // Waypoints related parameters
         const int N = odom_path.poses.size(); // Number of waypoints
-        const double costheta = cos(theta);
-        const double sintheta = sin(theta);
+        const double costheta = cos(rotation_theta);
+        const double sintheta = sin(rotation_theta);
         
         // Convert to the vehicle coordinate system
         VectorXd x_veh(N);
@@ -294,7 +308,7 @@ namespace mpc_ros{
         gy = odom_path.poses[N_sample].pose.position.y - odom_path.poses[0].pose.position.y;
         
 
-        double temp_theta = theta;
+        double temp_theta = rotation_theta;
         double traj_deg = atan2(gy,gx); // odom frame
         double PI = 3.141592;
 
@@ -385,7 +399,7 @@ namespace mpc_ros{
         int _index = 0;
         if (_arrival_state == ONLY_POSITION_ARRIVED)
             int _index = _l_path.poses.size() - 1;
-        _etheta = tf::getYaw(_l_path.poses[_index].pose.orientation) - _rtheta;
+        _etheta = tf::getYaw(_l_path.poses[_index].pose.orientation) - _rotation_rtheta;
         cmd_vel.angular.z = _etheta + _yaw_tolerance*_etheta/abs(_etheta);
     }
 
@@ -425,8 +439,8 @@ namespace mpc_ros{
         double _dy = _l_path.poses[last_index].pose.position.y - _ry;
         double _goalyaw = tf::getYaw(_l_path.poses[last_index].pose.orientation);
         double _pdist = hypot(_dx, _dy);
-        double _etheta = _goalyaw - _rtheta;
-        double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rtheta;
+        double _etheta = _goalyaw - _rotation_rtheta;
+        double _heading_error = tf::getYaw(_l_path.poses[0].pose.orientation) - _rotation_rtheta;
         std::vector<double> _rpos = {_rx, _ry};
         std::vector<double> _goalpos = {_l_path.poses[last_index].pose.position.x, _l_path.poses[last_index].pose.position.y};
 
@@ -540,9 +554,19 @@ namespace mpc_ros{
         _rx = _odom.pose.pose.position.x;
         _ry = _odom.pose.pose.position.y;
         _rtheta = tf::getYaw(_odom.pose.pose.orientation);
+        if (!_heading_front) 
+            _rotation_rtheta = normalizeAngle(tf::getYaw(_odom.pose.pose.orientation) + M_PI, -M_PI, M_PI);
+        else 
+            _rotation_rtheta = tf::getYaw(_odom.pose.pose.orientation);
         _fvx = _odom.twist.twist.linear.x;
         _fvy = _odom.twist.twist.linear.y;
         _fvw = _odom.twist.twist.angular.z;
+    }
+
+    void MPCPlannerROS::feedbackCB(const geometry_msgs::Twist::ConstPtr& feedbackMsg)
+    {
+        _fvlinear = feedbackMsg->linear.x;
+        _fvangular = feedbackMsg->angular.z;
     }
 
     void MPCPlannerROS::pathCB(const nav_msgs::Path::ConstPtr& pathMsg)
