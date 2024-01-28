@@ -21,14 +21,14 @@
         <include>
             <uri>model://aruco_visual_marker_7</uri>
         </include>
-        <pose frame="">1 2 0.5 0 -1.563161 -1.563161</pose>
+        <pose frame="">1 2 0.22 0 -1.563161 -1.563161</pose>
 	</model>
 
     <model name="april_tag_00001">
         <include>
             <uri>model://Apriltag36_11_00001</uri>
         </include>
-        <pose frame="">1 2 0.4 0 -1.563161 -1.563161</pose>
+        <pose frame="">1 2 0.12 0 -1.563161 -1.563161</pose>
 	</model>
 
 
