@@ -19,7 +19,7 @@
         <param name="w_accel"                   value="200"/>
         <param name="w_angvel_d"                value="300"/>
         <param name="w_accel_d"                 value="0.1"/>
-        <param name="max_angvel"                value="0.1"/>
+        <param name="max_angvel"                value="0.2"/>
         <param name="max_throttle"              value="0.2"/>
         <param name="bound_value"               value="20.0"/>
         <param name="path_length"               value="0.6"/>
