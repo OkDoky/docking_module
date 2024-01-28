@@ -1,7 +1,10 @@
 <launch>
     <arg name="dist"        default="0.5"/>
+    <arg name="direction"   default="front"/>
     <node pkg="docking_out_module" name="docking_out" type="docking_out.py">
         <param name="dist" value="$(arg dist)"/>
+        <param name="go_back"   value="true" if="$(eval direction == 'front')"/>
+        <param name="go_back"   value="false" if="$(eval direction == 'rear')"/>
         <remap from="scan" to="scan_filtered"/>
     </node>
 </launch>
