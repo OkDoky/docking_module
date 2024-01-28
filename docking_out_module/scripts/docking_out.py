@@ -27,7 +27,6 @@ class DockingOUT:
         self.footprint = None
         self.rpose = Pose2D()
         self.scan = LaserScan()
-        self.direction = -1
         self.default_speed = 0.2
         self.subs = []
         self.srvs = []
@@ -37,6 +36,7 @@ class DockingOUT:
         self.srvs.append(rospy.Service("set_docking_out", SetBool, self.docking_trigger))
         self.pubs['cmd'] = rospy.Publisher("cmd_vel", Twist, queue_size=1)
         self.pubs['state'] = rospy.Publisher("docking_out/status", String, queue_size=1)
+        self.direction = -1 if bool(rospy.get_param("~go_back", True)) else 1
         self.is_running = False
         self.is_paused = False
         self.is_detected = False
@@ -47,6 +47,7 @@ class DockingOUT:
     def docking_trigger(self, req):
         if req.data:
             dist = float(rospy.get_param("~dist", 0.5))
+            self.direction = -1 if bool(rospy.get_param("~go_back", True)) else 1
             if self.footprint == None:
                 polygon = np.array(eval(rospy.get_param("move_base/local_costmap/footprint", [[-0.105,-0.105],[-0.105,0.105],[0.105,0.105],[0.105,-0.105]])))
                 _sfp = [(point[0], point[1]) for point in polygon]
