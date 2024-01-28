@@ -2,10 +2,13 @@
     <arg name="path_displacement"   default="0.35"/>
     <arg name="robot_size"          default="0.2"/>
     <arg name="marker_displacement" default="0.05"/>
+    <arg name="direction"           default="front"     doc="opt: front, rear"/>
     
     <node name="path_generate" pkg="docking_planner" type="transform.py" output="screen">
         <param name="path_displacement" type="double" value="$(arg path_displacement)"/>
         <param name="robot_size" type="double" value="$(arg robot_size)"/>
         <param name="marker_displacement" type="double" value="$(arg marker_displacement)"/>
+        <param name="heading_front"     type="bool"     value="true"  if="$(eval direction == 'front')"/>
+        <param name="heading_front"     type="bool"     value="false" if="$(eval direction == 'rear')"/>
     </node>
 </launch>
